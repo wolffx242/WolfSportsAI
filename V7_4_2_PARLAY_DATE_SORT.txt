@@ -1,0 +1,8 @@
+WolfSportsAI V7.4.2 Parlay Date Sorting Fix
+
+- Fixes Parlay Builder date sorting.
+- Sorting now uses the real commence_time timestamp instead of formatted date text.
+- Earliest upcoming games appear first.
+- Game Date and Game Time remain user-friendly display columns.
+- The hidden timestamp sort column is removed before display/download.
+- All V7.4.1 A+/A/B-only parlay rules are retained.

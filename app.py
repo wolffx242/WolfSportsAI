@@ -1404,7 +1404,7 @@ elif page=="🧾 Parlay Builder":
             cols=[c for c in ["sport","leg_type","player_name","market","selection","line",
                               "best_price","best_book","Model %","Edge %","confidence",
                               "away_team","home_team"] if c in q.columns]
-            st.caption("Pick names are formatted like a bet slip: team + market/line, or matchup + Over/Under total.")
+            st.caption("Pick names are formatted like a bet slip. Parlay legs are sorted chronologically by game start time.")
             _parlay_view=q[cols].copy()
             if len(_parlay_view):
                 _parlay_view["Pick"]=_parlay_view.apply(friendly_pick_label,axis=1)
@@ -1420,11 +1420,19 @@ elif page=="🧾 Parlay Builder":
                 }
                 _parlay_view=_parlay_view.rename(columns=_rename)
                 if "commence_time" in q.columns:
+                    # Keep a real timestamp for chronological sorting.
+                    _sort_time=pd.to_datetime(q["commence_time"],utc=True,errors="coerce")
+                    _parlay_view["_sort_time"]=_sort_time.values
                     _parlay_view["Game Date"]=q["commence_time"].apply(lambda x:game_datetime_parts(x)[0]).values
                     _parlay_view["Game Time"]=q["commence_time"].apply(lambda x:game_datetime_parts(x)[1]).values
+                    _parlay_view=_parlay_view.sort_values(
+                        ["_sort_time","sport","Away","Home"],
+                        ascending=[True,True,True,True],
+                        na_position="last"
+                    )
                 _preferred=["sport","Pick","Bet Type","Game Date","Game Time","Odds","Sportsbook","Edge %","Confidence","Away","Home"]
                 _preferred=[c for c in _preferred if c in _parlay_view.columns]
-                _parlay_view=_parlay_view[_preferred]
+                _parlay_view=_parlay_view[_preferred].reset_index(drop=True)
             st.dataframe(_parlay_view,use_container_width=True,hide_index=True)
             st.download_button("Download parlay sheet",_parlay_view.to_csv(index=False).encode(),
                                f"wolfsports_{legs}_leg_parlay.csv","text/csv")

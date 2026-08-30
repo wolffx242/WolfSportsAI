@@ -1,0 +1,22 @@
+{
+  "version": "7.4.2 Parlay Date Sorting Fix",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "checks": {
+    "real_timestamp_sort": true,
+    "chronological_sort": true,
+    "sort_time_hidden": true,
+    "caption_updated": true
+  }
+}
