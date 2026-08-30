@@ -1,0 +1,14 @@
+WolfSportsAI V7 Matchups / Pick-First UI
+
+Requested redesign:
+- Matchup pages now use a compact table/card layout inspired by mainstream sportsbook analytics sites.
+- WolfSportsAI branding and original styling retained; no third-party branding/assets copied.
+- Main columns: Matchup, selected market/best price, AI Win %, AI Lean.
+- AI Win % replaces public "% of bets" style information.
+- AI Win % means the model's straight-up probability of each team winning the game.
+- Moneyline is the default view because it directly answers which team is more likely to win.
+- Users can switch Moneyline / Spread / Total / All.
+- Spread view shows each team's current spread and price while AI Win % remains straight-up game win probability.
+- Total view shows Over/Under line and price while AI Win % still shows team game-win probabilities.
+- Clicking a matchup still opens the detailed Game Center.
+- Existing Autopilot V6.5 performance architecture retained.

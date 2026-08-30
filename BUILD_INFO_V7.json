@@ -1,0 +1,27 @@
+{
+  "version": "V7 Matchups Pick-First",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "features": {
+    "ai_win_percent": true,
+    "moneyline_default": true,
+    "market_tabs": [
+      "Moneyline",
+      "Spread",
+      "Total",
+      "All"
+    ],
+    "autopilot_v6_5_retained": true
+  }
+}

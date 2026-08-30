@@ -60,8 +60,8 @@ def _start_autopilot_worker(api_key):
     return start_worker(
         api_key=api_key,
         sports=("NBA","NFL"),
-        refresh_minutes=15,
-        retrain_hours=12,
+        refresh_minutes=5,
+        retrain_hours=4,
         backtest_hours=12
     )
 
@@ -242,6 +242,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+st.markdown(r"""<style>
+/* V7 MATCHUPS — pick-first table layout */
+.matchup-wrap{background:#0b1118;border:1px solid #1c2835;border-radius:14px;margin:10px 0 14px;overflow:hidden}
+.matchup-head{display:grid;grid-template-columns:minmax(240px,2fr) minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.8fr);gap:10px;padding:9px 14px;background:#0e1620;border-bottom:1px solid #1c2835;color:#748398;font-size:.65rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.matchup-body{display:grid;grid-template-columns:minmax(240px,2fr) minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.8fr);gap:10px;align-items:center;padding:12px 14px}
+.matchup-teams{display:grid;gap:10px}
+.matchup-team{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px}
+.matchup-team-name{font-weight:800;color:#f4f7fb;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.matchup-side{font-size:.63rem;color:#6f8095;font-weight:700}
+.matchup-market{display:grid;gap:8px}
+.matchup-line{background:#111b26;border:1px solid #213142;border-radius:8px;padding:7px 9px;display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:31px}
+.matchup-line strong{font-size:.78rem;color:#f8fafc}
+.matchup-line span{font-size:.7rem;color:#91a1b5}
+.win-cell{display:grid;gap:8px}
+.win-row{min-height:31px;display:flex;align-items:center;gap:8px}
+.win-pct{font-size:.78rem;font-weight:900;color:#e8eef7;min-width:42px;text-align:right}
+.win-track{height:5px;flex:1;background:#182432;border-radius:99px;overflow:hidden}
+.win-fill{height:100%;background:#22d3ee;border-radius:99px}
+.win-fill.alt{background:#5ce0c3}
+.matchup-ai{display:grid;gap:7px}
+.ai-chip{border:1px solid #234052;background:#0d1b24;border-radius:8px;padding:7px 9px;text-align:center}
+.ai-chip b{display:block;color:#22d3ee;font-size:.78rem}
+.ai-chip span{font-size:.61rem;color:#748398}
+.matchup-foot{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-top:1px solid #182431;background:#0c131b;color:#718096;font-size:.66rem}
+@media(max-width:900px){
+ .matchup-head{display:none}
+ .matchup-body{grid-template-columns:1fr 1fr}
+ .matchup-teams{grid-column:1/-1}
+ .matchup-foot{gap:10px;flex-wrap:wrap}
+}
+</style>""", unsafe_allow_html=True)
+
 # ---------- STATE ----------
 if "raw" not in st.session_state:
     st.session_state.raw=pd.DataFrame()
@@ -291,11 +324,12 @@ with st.sidebar:
     )
     mins=st.select_slider(
         "Refresh target",
-        options=[10,15,20,30,45,60],
-        value=15,
+        options=[5,10,15,20,30,45,60],
+        value=5,
         format_func=lambda x:f"{x} min"
     )
     st.caption("Fast mode: normal clicks use cached/local data.")
+    st.caption("Turbo Autopilot: parallel NBA/NFL refresh + change detection.")
 
     if KEY:
         st.markdown('<div class="status-pill">● API Connected</div>',unsafe_allow_html=True)
@@ -451,8 +485,8 @@ def betting_filter_bar(df, key_prefix="marketfilter"):
     with c2:
         market_choice=st.segmented_control(
             "Bet type",
-            ["All","Moneyline","Spread","Total"],
-            default="All",
+            ["Moneyline","Spread","Total","All"],
+            default="Moneyline",
             key=f"{key_prefix}_market"
         )
 
@@ -537,14 +571,14 @@ def market_table(df):
         st.info("No market data available.")
         return
     q=df.copy()
-    q["Model %"]=(q.model_prob*100).round(1)
+    q["AI Probability %"]=(q.model_prob*100).round(1)
     q["Market %"]=(q.market_prob*100).round(1)
     q["Edge %"]=(q.edge*100).round(1)
     q["EV %"]=(q.ev_per_unit*100).round(1)
     q["Odds"]=q.best_price.apply(fmt_odds)
     cols=["commence_time","away_team","home_team","market","selection","line","Odds","best_book",
-          "Model %","Market %","Edge %","EV %","confidence"]
-    st.dataframe(q[cols].sort_values(["Model %","Edge %"],ascending=False),
+          "AI Probability %","Market %","Edge %","EV %","confidence"]
+    st.dataframe(q[cols].sort_values(["AI Probability %","Edge %"],ascending=False),
                  use_container_width=True,hide_index=True,height=520)
 
 def filter_bar(df,key):
@@ -590,37 +624,143 @@ def _market_box(label,row):
       <div class="market-edge">AI {float(row.model_prob)*100:.0f}% • Edge {edge:+.1f}%</div>
     </div>"""
 
-def game_market_board(df,keyprefix="board",limit=16):
-    """Compact game board inspired by pro odds terminals."""
+def _game_win_probs(g, away_team, home_team):
+    """Return AI straight-up win probabilities for both teams.
+    Prefer current moneyline model rows; fall back to matchup model.
+    """
+    away_p=home_p=np.nan
+    ml=g[g["market"].astype(str).str.lower().eq("moneyline")] if len(g) else pd.DataFrame()
+    if len(ml):
+        for _,r in ml.iterrows():
+            sel=str(r.get("selection",""))
+            if sel==str(away_team):
+                away_p=float(r.model_prob)
+            elif sel==str(home_team):
+                home_p=float(r.model_prob)
+
+    # If only one side is present, make the other complementary.
+    if pd.notna(home_p) and pd.isna(away_p):
+        away_p=1-home_p
+    if pd.notna(away_p) and pd.isna(home_p):
+        home_p=1-away_p
+
+    # Historical matchup model fallback.
+    if pd.isna(home_p) or pd.isna(away_p):
+        try:
+            pred=predict_matchup(str(g.iloc[0].sport),str(home_team),str(away_team))
+            if pred and pred.get("home_win_prob") is not None:
+                home_p=float(pred["home_win_prob"])
+                away_p=1-home_p
+        except Exception:
+            pass
+
+    if pd.isna(home_p) or pd.isna(away_p):
+        home_p=away_p=.50
+    s=max(home_p+away_p,1e-9)
+    return away_p/s,home_p/s
+
+def _side_market_row(g, market, team=None, total_side=None):
+    q=g[g["market"].astype(str).str.lower().eq(str(market).lower())]
+    if team is not None and len(q):
+        q=q[q["selection"].astype(str).eq(str(team))]
+    if total_side is not None and len(q):
+        q=q[q["selection"].astype(str).str.lower().str.startswith(str(total_side).lower())]
+    if q.empty:
+        return None
+    return q.sort_values(["model_prob","edge"],ascending=False).iloc[0]
+
+def _line_text(row, market):
+    if row is None:
+        return "—", "—"
+    point=row.get("line",np.nan)
+    if pd.isna(point):
+        point=row.get("point",np.nan)
+    sel=str(row.get("selection",""))
+    if str(market).lower()=="moneyline":
+        txt=fmt_odds(row.best_price)
+    elif str(market).lower()=="spread":
+        txt=(f"{float(point):+g}" if pd.notna(point) else sel)
+    else:
+        prefix="O" if sel.lower().startswith("over") else "U"
+        txt=(f"{prefix} {float(point):g}" if pd.notna(point) else sel)
+    return txt,fmt_odds(row.best_price)
+
+def game_market_board(df,keyprefix="board",limit=16,display_market=None):
+    """WolfSportsAI matchup board: teams, current line, AI win probability, and best price."""
     if df is None or df.empty:
         st.info("No live games match the selected filters.")
         return
+
+    # Detect the active market from the filtered frame unless caller specifies one.
+    available=[str(x).lower() for x in df.market.dropna().unique()]
+    market=(display_market or ("Moneyline" if "moneyline" in available else
+                              "Spread" if "spread" in available else
+                              "Total" if "total" in available else "Moneyline"))
+
     evs=df[["event_id","sport","away_team","home_team","commence_time"]].drop_duplicates("event_id").head(limit)
+    st.markdown(
+        f'<div class="pick-ribbon"><strong>{market}</strong> • AI WIN % is WolfSportsAI straight-up win probability, not public betting percentage.</div>',
+        unsafe_allow_html=True
+    )
+
     for _,ev in evs.iterrows():
+        # Use all current team rows for the event when possible, not just a single displayed market.
+        allg=team[team.event_id.eq(ev.event_id)] if len(team) and "event_id" in team.columns else df[df.event_id.eq(ev.event_id)]
         g=df[df.event_id.eq(ev.event_id)]
-        ml=_first_market_row(g,"Moneyline")
-        spr=_first_market_row(g,"Spread")
-        ov=_first_market_row(g,"Total","Over")
-        un=_first_market_row(g,"Total","Under")
-        st.markdown(
-          f"""<div class="game-row">
-            <div class="game-row-top">
-              <div class="team-stack">
-                <div class="team-meta">{ev.sport} • {str(ev.commence_time)[:16]}</div>
-                <div class="team-line"><span class="team-name">{ev.away_team}</span><span class="team-meta">AWAY</span></div>
-                <div class="team-line"><span class="team-name">{ev.home_team}</span><span class="team-meta">HOME</span></div>
-              </div>
-              {_market_box("Moneyline",ml)}
-              {_market_box("Spread",spr)}
-              {_market_box("Over",ov)}
-              {_market_box("Under",un)}
+        away_p,home_p=_game_win_probs(allg,ev.away_team,ev.home_team)
+
+        if market=="Spread":
+            ar=_side_market_row(g,"Spread",ev.away_team)
+            hr=_side_market_row(g,"Spread",ev.home_team)
+        elif market=="Total":
+            ar=_side_market_row(g,"Total",total_side="Over")
+            hr=_side_market_row(g,"Total",total_side="Under")
+        else:
+            ar=_side_market_row(g,"Moneyline",ev.away_team)
+            hr=_side_market_row(g,"Moneyline",ev.home_team)
+
+        a_line,a_odds=_line_text(ar,market)
+        h_line,h_odds=_line_text(hr,market)
+        a_model=float(ar.model_prob)*100 if ar is not None else away_p*100
+        h_model=float(hr.model_prob)*100 if hr is not None else home_p*100
+        leader=ev.away_team if away_p>=home_p else ev.home_team
+        leadpct=max(away_p,home_p)*100
+
+        st.markdown(f"""
+        <div class="matchup-wrap">
+          <div class="matchup-head">
+            <div>Matchup</div><div>{market} / Best Price</div><div>AI Win %</div><div>AI Lean</div>
+          </div>
+          <div class="matchup-body">
+            <div class="matchup-teams">
+              <div class="matchup-team"><span class="matchup-team-name">{ev.away_team}</span><span class="matchup-side">AWAY</span></div>
+              <div class="matchup-team"><span class="matchup-team-name">{ev.home_team}</span><span class="matchup-side">HOME</span></div>
             </div>
-            <div class="game-row-foot">
-              <span class="terminal-label">AI model + best available book</span>
-              <span class="terminal-label">Match details →</span>
+            <div class="matchup-market">
+              <div class="matchup-line"><strong>{a_line}</strong><span>{a_odds}</span></div>
+              <div class="matchup-line"><strong>{h_line}</strong><span>{h_odds}</span></div>
             </div>
-          </div>""",unsafe_allow_html=True)
-        if st.button(f"Open {ev.away_team} @ {ev.home_team}",key=f"{keyprefix}_{ev.event_id}",use_container_width=True):
+            <div class="win-cell">
+              <div class="win-row"><span class="win-pct">{away_p*100:.1f}%</span><div class="win-track"><div class="win-fill" style="width:{away_p*100:.1f}%"></div></div></div>
+              <div class="win-row"><span class="win-pct">{home_p*100:.1f}%</span><div class="win-track"><div class="win-fill alt" style="width:{home_p*100:.1f}%"></div></div></div>
+            </div>
+            <div class="matchup-ai">
+              <div class="ai-chip"><b>{leader}</b><span>{leadpct:.1f}% win probability</span></div>
+              <div class="ai-chip"><b>{max(a_model,h_model):.1f}%</b><span>selected-market model</span></div>
+            </div>
+          </div>
+          <div class="matchup-foot">
+            <span>{ev.sport} • {str(ev.commence_time)[:16]} • Best available sportsbook price</span>
+            <span>Matchup analysis →</span>
+          </div>
+        </div>
+        """,unsafe_allow_html=True)
+
+        if st.button(
+            f"Open matchup: {ev.away_team} @ {ev.home_team}",
+            key=f"{keyprefix}_{ev.event_id}",
+            use_container_width=True
+        ):
             open_game(ev.event_id)
 
 def prop_list_cards(df,limit=18):
@@ -758,7 +898,7 @@ if page=="🔥 Best Bets":
         """, unsafe_allow_html=True)
         st.info("No cached sportsbook rows are available yet. Give Autopilot a moment, then click Refresh live board once.")
     else:
-        game_market_board(filtered_board,"bestboard",16)
+        game_market_board(filtered_board,"bestboard",16,st.session_state.get("bestbets_filter_market"))
     st.divider()
     with st.expander("Show ranked AI opportunities"):
         pick_cards(filtered_board,10)
@@ -771,8 +911,8 @@ elif page in ("🏀 NBA","🏈 NFL"):
     with m1:
         league_market=st.segmented_control(
             "Market",
-            ["All","Moneyline","Spread","Total"],
-            default="All",
+            ["Moneyline","Spread","Total","All"],
+            default="Moneyline",
             key=f"{sport}_manual_market"
         )
     with m2:
@@ -835,7 +975,7 @@ elif page=="🎯 Game Center":
                 st.subheader("Current moneyline")
                 cur=evteam[evteam.market.eq("Moneyline")]
                 if len(cur):
-                    q=cur.copy();q["Model %"]=(q.model_prob*100).round(1);q["Market %"]=(q.market_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
+                    q=cur.copy();q["AI Probability %"]=(q.model_prob*100).round(1);q["Market %"]=(q.market_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
                     st.dataframe(q[["selection","best_price","best_book","Model %","Market %","Edge %","confidence"]],use_container_width=True,hide_index=True)
                 line_book_table(st.session_state.raw,eid,"h2h")
 
@@ -883,7 +1023,7 @@ elif page=="🎯 Game Center":
                     if model:
                         st.info(f"Historical-form projected score total: {model['pred_total']:.1f}")
                     st.subheader("Current Over / Under")
-                    q=cur.copy();q["Model %"]=(q.model_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
+                    q=cur.copy();q["AI Probability %"]=(q.model_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
                     st.dataframe(q[["selection","line","best_price","best_book","Model %","Edge %","confidence"]],use_container_width=True,hide_index=True)
                     st.subheader("Book-by-book totals")
                     line_book_table(st.session_state.raw,eid,"totals")
@@ -993,7 +1133,7 @@ elif page=="🔎 Prop Scanner":
         with st.expander("Open full prop table"):
             st.dataframe(z[["player_name","market","side","point","best_price","best_book",
                             "Model %","Edge %","EV %","games_used","recent_average",
-                            "confidence","away_team","home_team"]].sort_values(["Model %","Edge %"],ascending=False),
+                            "confidence","away_team","home_team"]].sort_values(["AI Probability %","Edge %"],ascending=False),
                          use_container_width=True,hide_index=True,height=600)
         st.download_button("Download filtered prop board",z.to_csv(index=False).encode(),
                            "wolfsports_prop_board.csv","text/csv")
@@ -1036,7 +1176,7 @@ elif page=="🧾 Parlay Builder":
             </div>
             """,unsafe_allow_html=True)
         if len(p):
-            q=p.copy();q["Model %"]=(q.model_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
+            q=p.copy();q["AI Probability %"]=(q.model_prob*100).round(1);q["Edge %"]=(q.edge*100).round(1)
             cols=[c for c in ["sport","leg_type","player_name","market","selection","line",
                               "best_price","best_book","Model %","Edge %","confidence",
                               "away_team","home_team"] if c in q.columns]
@@ -1134,7 +1274,7 @@ elif page=="⚙️ Settings":
     st.subheader("Autopilot")
     st.write("Automatic schedule while WolfSportsAI is open:")
     st.write("• Odds/results refresh: every 15 minutes")
-    st.write("• Model retraining: every 12 hours")
+    st.write("• Model retraining: every 4 hours, or immediately when new completed games arrive")
     st.write("• Backtesting: every 6 hours")
     st.caption("On a free cloud host, Autopilot runs while the app instance is awake. Free hosts may sleep/restart inactive apps; WolfSportsAI rebuilds its historical model state when needed.")
     st.subheader("Data sources")

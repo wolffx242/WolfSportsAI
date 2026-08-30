@@ -1,0 +1,18 @@
+WolfSportsAI V6.5 Turbo Autopilot
+
+Performance architecture:
+- NBA and NFL live odds/scores refresh in parallel.
+- Background worker wakes every 60 seconds but only performs work when due.
+- Live odds/results target refresh every 5 minutes.
+- Completed-game count change detection.
+- Retraining happens when new completed games are detected, when a model is missing,
+  or as a 4-hour safety cadence.
+- Historical bootstrap is retried at most once every 24 hours when missing.
+- A retrain's chronological holdout evaluation is saved as the backtest result,
+  avoiding duplicate model training.
+- Full safety backtest remains every 12 hours.
+- UI stays non-blocking and uses cached/local data from V6.4.
+- Player/API caches from V6.4 retained.
+
+Recommended production server:
+2 vCPU / 4 GB RAM or better for the best cost/performance balance.
