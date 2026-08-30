@@ -1370,6 +1370,16 @@ elif page=="🧾 Parlay Builder":
         _future_props=future_only(st.session_state.props)
         alllegs=pd.concat([alllegs,_future_props],ignore_index=True,sort=False) if len(alllegs) else _future_props
 
+    # Parlay quality gate: never use C or Pass selections.
+    # Only A+, A and B graded opportunities are eligible for generated parlays.
+    allowed_parlay_grades={"A+","A","B"}
+    if len(alllegs) and "confidence" in alllegs.columns:
+        alllegs=alllegs[
+            alllegs["confidence"].astype(str).str.upper().isin(allowed_parlay_grades)
+        ].copy()
+
+    st.caption("🛡️ Parlay quality filter: only A+, A and B confidence picks are eligible. C and Pass picks are automatically excluded.")
+
     if build_it:
         st.session_state.parlay=build(alllegs,legs,minp,mine,mode,same)
 
@@ -1377,7 +1387,7 @@ elif page=="🧾 Parlay Builder":
     if r:
         p=r["legs"]
         if not r["complete"]:
-            st.warning(f"Only {len(p)} qualifying legs were available. WolfSportsAI did not weaken your filters just to fill the ticket.")
+            st.warning(f"Only {len(p)} A+/A/B qualifying legs were available. WolfSportsAI will not add C-grade picks just to fill the ticket.")
         if len(p)>=2:
             st.markdown(f"""
             <div class="parlay-summary">

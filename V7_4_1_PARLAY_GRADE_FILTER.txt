@@ -1,0 +1,9 @@
+WolfSportsAI V7.4.1 Parlay Grade Quality Gate
+
+- Generated parlays only use confidence grades A+, A, and B.
+- C-grade picks are automatically excluded.
+- Pass picks are automatically excluded.
+- If there are not enough A+/A/B picks to reach the requested leg count,
+  WolfSportsAI returns a shorter parlay instead of weakening quality.
+- UI clearly displays the A+ through B quality rule.
+- All V7.4 upcoming-game/date/time functionality retained.
