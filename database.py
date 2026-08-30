@@ -29,6 +29,18 @@ def init_db():
           completed INTEGER,updated_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS upcoming_games(
+          event_id TEXT PRIMARY KEY,
+          sport TEXT NOT NULL,
+          commence_time TEXT NOT NULL,
+          home_team TEXT,
+          away_team TEXT,
+          source TEXT,
+          updated_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_upcoming_sport_time
+          ON upcoming_games(sport,commence_time);
+
         CREATE TABLE IF NOT EXISTS player_prop_snapshots(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           captured_at TEXT,sport TEXT,event_id TEXT,commence_time TEXT,
@@ -127,6 +139,33 @@ def append_df(table, df):
         return
     with connect() as con:
         df.to_sql(table, con, if_exists="append", index=False)
+
+
+def upsert_upcoming_games(df):
+    if df is None or df.empty:
+        return
+    cols=["event_id","sport","commence_time","home_team","away_team","source","updated_at"]
+    x=df.copy()
+    for c in cols:
+        if c not in x.columns:
+            x[c]=None
+    with connect() as con:
+        for row in x[cols].itertuples(index=False,name=None):
+            con.execute("""
+            INSERT INTO upcoming_games
+            (event_id,sport,commence_time,home_team,away_team,source,updated_at)
+            VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(event_id) DO UPDATE SET
+              sport=excluded.sport,
+              commence_time=excluded.commence_time,
+              home_team=excluded.home_team,
+              away_team=excluded.away_team,
+              source=excluded.source,
+              updated_at=excluded.updated_at
+            """,row)
+        # Remove games that are safely in the past; completed results remain elsewhere.
+        con.execute("DELETE FROM upcoming_games WHERE commence_time < datetime('now','-12 hours')")
+
 
 def upsert_results(df):
     if df is None or df.empty:

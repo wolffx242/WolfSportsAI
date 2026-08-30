@@ -1,0 +1,22 @@
+WolfSportsAI V7.4 Upcoming Games + Dated Picks
+
+New capabilities
+- Adds an Upcoming Games page for NBA and NFL.
+- Upcoming events are pulled from The Odds API events endpoint and cached in SQLite.
+- Scheduled maintenance refreshes upcoming games together with odds/results.
+- Upcoming page can also be refreshed manually without slowing other pages.
+- First visit can populate the schedule if a new deployment has an empty cache.
+- Upcoming games without sportsbook lines are displayed but are NOT allowed to become AI parlay picks.
+- Parlay Builder filters out games that have already started.
+- Every parlay leg now displays Game Date and Game Time.
+- Best Bet pick cards display game date/time.
+- Matchup board footer displays game date/time.
+- All displayed times use America/Nassau (Bahamas) local time.
+- Existing V7.3 friendly pick naming retained.
+- Existing V7.2 instant market tabs retained.
+- Existing V7.1 scheduled learning/maintenance retained.
+
+Data integrity rule
+WolfSportsAI never invents a spread, moneyline, total or sportsbook price for a future game.
+A scheduled matchup can be visible before odds arrive; it becomes eligible for the AI/parlay
+builder only when real market data is available.

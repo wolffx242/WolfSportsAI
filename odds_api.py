@@ -91,3 +91,32 @@ def event_props(sport,event_id,key,regions="us,us2"):
                   "side":out.get("name"),"point":out.get("point"),"price":out.get("price")
                 })
     return pd.DataFrame(rows),h
+
+
+def upcoming_events(sport,key):
+    """Return normalized upcoming events from The Odds API events endpoint."""
+    data,h=events(sport,key)
+    now=datetime.now(timezone.utc).isoformat()
+    rows=[]
+    for ev in data or []:
+        ct=ev.get("commence_time")
+        if not ct:
+            continue
+        rows.append({
+            "event_id":ev.get("id"),
+            "sport":sport,
+            "commence_time":ct,
+            "home_team":ev.get("home_team"),
+            "away_team":ev.get("away_team"),
+            "source":"The Odds API",
+            "updated_at":now,
+        })
+    x=pd.DataFrame(rows)
+    if len(x):
+        x["commence_time"]=pd.to_datetime(x["commence_time"],utc=True,errors="coerce")
+        x=x[x["commence_time"].notna()]
+        x=x[x["commence_time"]>=pd.Timestamp.now(tz="UTC")-pd.Timedelta(hours=3)]
+        x=x.sort_values("commence_time")
+        x["commence_time"]=x["commence_time"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return x,h
+

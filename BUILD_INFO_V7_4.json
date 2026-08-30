@@ -1,0 +1,27 @@
+{
+  "version": "7.4 Upcoming Games + Dated Picks",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "checks": {
+    "upcoming_db_table": true,
+    "upcoming_api_normalizer": true,
+    "autopilot_updates_schedule": true,
+    "upcoming_page": true,
+    "bahamas_time": true,
+    "future_parlay_filter": true,
+    "parlay_game_date": true,
+    "parlay_game_time": true,
+    "pick_card_datetime": true
+  }
+}

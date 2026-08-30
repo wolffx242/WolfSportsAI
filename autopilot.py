@@ -12,10 +12,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 from database import (
-    append_df, upsert_results, read_sql, get_autopilot_status,
+    append_df, upsert_results, upsert_upcoming_games, read_sql, get_autopilot_status,
     update_autopilot_status, insert_backtest_run
 )
-from odds_api import featured, scores
+from odds_api import featured, scores, upcoming_events
 from historical_bootstrap import (
     bootstrap_sport, train_bootstrap_models, load_bootstrap
 )
@@ -70,7 +70,7 @@ def _record_backtest(sport, payload):
 
 def _fetch_one_sport(sport, api_key):
     """Fetch odds + scores for one sport. Designed to run in a worker thread."""
-    result={"sport":sport,"market":None,"scores":None,"errors":[]}
+    result={"sport":sport,"market":None,"scores":None,"upcoming":None,"errors":[]}
     try:
         m,_=featured(sport,api_key)
         result["market"]=m
@@ -81,6 +81,11 @@ def _fetch_one_sport(sport, api_key):
         result["scores"]=sc
     except Exception as e:
         result["errors"].append(f"scores: {e}")
+    try:
+        up,_=upcoming_events(sport,api_key)
+        result["upcoming"]=up
+    except Exception as e:
+        result["errors"].append(f"schedule: {e}")
     return result
 
 def _completed_count_safe(sport):
@@ -115,10 +120,13 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
                         r=fut.result()
                         m=r.get("market")
                         sc=r.get("scores")
+                        up=r.get("upcoming")
                         if m is not None and len(m):
                             append_df("market_snapshots",m)
                         if sc is not None and len(sc):
                             upsert_results(sc)
+                        if up is not None and len(up):
+                            upsert_upcoming_games(up)
                         if r.get("errors"):
                             errors.extend([f"{sport} {x}" for x in r["errors"]])
                     except Exception as e:

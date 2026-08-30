@@ -8,8 +8,8 @@ import altair as alt
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from database import init_db,append_df,upsert_results,read_sql,count
-from odds_api import featured,scores,events,event_props
+from database import init_db,append_df,upsert_results,upsert_upcoming_games,read_sql,count
+from odds_api import featured,scores,events,event_props,upcoming_events
 from analytics import team_consensus,prop_consensus,perf_prob,blend,enrich
 from stats_sources import stat_series
 from parlay import build,SIZES
@@ -309,7 +309,7 @@ with st.sidebar:
 
     page=st.radio(
         "Navigation",
-        ["🔥 Best Bets","🏀 NBA","🏈 NFL","🎯 Game Center","👤 Player Lab","🔎 Prop Scanner",
+        ["🔥 Best Bets","🏀 NBA","🏈 NFL","📅 Upcoming Games","🎯 Game Center","👤 Player Lab","🔎 Prop Scanner",
          "🧾 Parlay Builder","🧠 Model Lab","⚙️ Settings"],
         label_visibility="collapsed",
         key="nav"
@@ -372,6 +372,17 @@ def cached_stat_series(sport, player_name, market, n=20):
 def cached_snapshot(sport):
     return read_sql("""SELECT * FROM market_snapshots WHERE sport=? AND captured_at=
       (SELECT MAX(captured_at) FROM market_snapshots WHERE sport=?)""",(sport,sport))
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_upcoming_schedule():
+    return read_sql("""
+        SELECT event_id,sport,commence_time,home_team,away_team,source,updated_at
+        FROM upcoming_games
+        WHERE datetime(commence_time) >= datetime('now','-3 hours')
+        ORDER BY datetime(commence_time), sport, away_team
+    """)
+
 
 
 @st.cache_data(ttl=900, show_spinner=False, max_entries=8)
@@ -472,6 +483,33 @@ if len(st.session_state.raw):
 else:
     team=pd.DataFrame()
     _team_json=""
+
+
+APP_TIMEZONE="America/Nassau"
+
+def game_datetime_parts(value):
+    """Display sportsbook times in Bahamas local time."""
+    try:
+        ts=pd.to_datetime(value,utc=True,errors="coerce")
+        if pd.isna(ts):
+            return "Date TBA","Time TBA"
+        ts=ts.tz_convert(APP_TIMEZONE)
+        return ts.strftime("%a, %b %d, %Y"), ts.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return "Date TBA","Time TBA"
+
+def game_datetime_label(value):
+    d,t=game_datetime_parts(value)
+    return f"{d} • {t}"
+
+def future_only(df):
+    """Parlays must use games that have not started yet."""
+    if df is None or df.empty or "commence_time" not in df.columns:
+        return df
+    x=df.copy()
+    ts=pd.to_datetime(x["commence_time"],utc=True,errors="coerce")
+    now=pd.Timestamp.now(tz="UTC")
+    return x[ts.notna() & (ts>now)].copy()
 
 # ---------- SHARED UI ----------
 def grade_class(g):
@@ -580,6 +618,7 @@ def pick_cards(df,limit=8):
             <div>
               <div class="pick-league">{r.sport} • {r.market}</div>
               <div class="pick-game">{game}</div>
+              <div class="small-muted">🗓 {game_datetime_label(r.get("commence_time"))} • Bahamas time</div>
             </div>
             <span class="{grade_class(g)}">{g}</span>
           </div>
@@ -779,7 +818,7 @@ def game_market_board(df,keyprefix="board",limit=16,display_market=None):
             </div>
           </div>
           <div class="matchup-foot">
-            <span>{ev.sport} • {str(ev.commence_time)[:16]} • Best available sportsbook price</span>
+            <span>{ev.sport} • 🗓 {game_datetime_label(ev.commence_time)} • Bahamas time • Best available sportsbook price</span>
             <span>Matchup analysis →</span>
           </div>
         </div>
@@ -1037,6 +1076,73 @@ elif page in ("🏀 NBA","🏈 NFL"):
     )
     league_market_fragment(sport,_team_json)
 
+
+elif page=="📅 Upcoming Games":
+    top_header(
+        "Upcoming Games",
+        "Upcoming NBA and NFL matchups are cached from the internet so the AI and Parlay Builder can prepare before game time."
+    )
+
+    c1,c2=st.columns([2,1])
+    with c1:
+        upcoming_sport=st.segmented_control(
+            "League",["All","NBA","NFL"],default="All",key="upcoming_sport"
+        )
+    with c2:
+        if st.button("↻ Refresh upcoming schedule",use_container_width=True,disabled=not bool(KEY)):
+            rows=[];errs=[]
+            with st.spinner("Checking upcoming NBA and NFL schedules..."):
+                for _sport in ("NBA","NFL"):
+                    try:
+                        _up,_=upcoming_events(_sport,KEY)
+                        if len(_up):
+                            upsert_upcoming_games(_up)
+                            rows.append(_up)
+                    except Exception as e:
+                        errs.append(f"{_sport}: {e}")
+            cached_upcoming_schedule.clear()
+            for e in errs:
+                st.warning(e)
+
+    upcoming=cached_upcoming_schedule().copy()
+
+    # First visit after a new deployment: populate only this page, never block other pages.
+    if upcoming.empty and KEY:
+        with st.spinner("Loading the upcoming schedule for the first time..."):
+            for _sport in ("NBA","NFL"):
+                try:
+                    _up,_=upcoming_events(_sport,KEY)
+                    if len(_up):
+                        upsert_upcoming_games(_up)
+                except Exception:
+                    pass
+        cached_upcoming_schedule.clear()
+        upcoming=cached_upcoming_schedule().copy()
+
+    if upcoming_sport!="All" and len(upcoming):
+        upcoming=upcoming[upcoming.sport.eq(upcoming_sport)]
+
+    if upcoming.empty:
+        st.info("No upcoming games are cached yet. Use Refresh upcoming schedule when the API is connected.")
+    else:
+        upcoming["Game Date"]=upcoming["commence_time"].apply(lambda x:game_datetime_parts(x)[0])
+        upcoming["Game Time"]=upcoming["commence_time"].apply(lambda x:game_datetime_parts(x)[1])
+        upcoming["Matchup"]=upcoming["away_team"].astype(str)+" @ "+upcoming["home_team"].astype(str)
+        # Mark whether current sportsbook markets are already loaded for AI/parlays.
+        market_ids=set(team.event_id.astype(str)) if len(team) and "event_id" in team.columns else set()
+        upcoming["Markets Ready"]=upcoming["event_id"].astype(str).apply(
+            lambda x:"✅ Odds + AI ready" if x in market_ids else "🕒 Waiting for sportsbook lines"
+        )
+        show=upcoming[["sport","Game Date","Game Time","Matchup","Markets Ready"]].rename(
+            columns={"sport":"League"}
+        )
+        st.dataframe(show,use_container_width=True,hide_index=True,height=560)
+        ready=(upcoming["Markets Ready"]=="✅ Odds + AI ready").sum()
+        st.caption(
+            f"{len(upcoming)} upcoming games shown • {ready} currently have sportsbook markets available for WolfSportsAI picks. "
+            "Games without real odds are shown on the schedule but are not invented or forced into parlays."
+        )
+
 elif page=="🎯 Game Center":
     top_header("Game Center","Open one matchup and drill into moneyline, spread, totals and recent-form evidence.")
     if st.button("← Back to Best Bets", key="gamecenter_back"):
@@ -1259,9 +1365,10 @@ elif page=="🧾 Parlay Builder":
     build_it=st.button(f"Build {legs}-leg {mode} parlay",type="primary",use_container_width=True)
     st.markdown('</div>',unsafe_allow_html=True)
 
-    alllegs=team.copy()
+    alllegs=future_only(team)
     if include_props and len(st.session_state.props):
-        alllegs=pd.concat([alllegs,st.session_state.props],ignore_index=True,sort=False) if len(alllegs) else st.session_state.props
+        _future_props=future_only(st.session_state.props)
+        alllegs=pd.concat([alllegs,_future_props],ignore_index=True,sort=False) if len(alllegs) else _future_props
 
     if build_it:
         st.session_state.parlay=build(alllegs,legs,minp,mine,mode,same)
@@ -1302,7 +1409,10 @@ elif page=="🧾 Parlay Builder":
                     "home_team":"Home"
                 }
                 _parlay_view=_parlay_view.rename(columns=_rename)
-                _preferred=["sport","Pick","Bet Type","Odds","Sportsbook","Edge %","Confidence","Away","Home"]
+                if "commence_time" in q.columns:
+                    _parlay_view["Game Date"]=q["commence_time"].apply(lambda x:game_datetime_parts(x)[0]).values
+                    _parlay_view["Game Time"]=q["commence_time"].apply(lambda x:game_datetime_parts(x)[1]).values
+                _preferred=["sport","Pick","Bet Type","Game Date","Game Time","Odds","Sportsbook","Edge %","Confidence","Away","Home"]
                 _preferred=[c for c in _preferred if c in _parlay_view.columns]
                 _parlay_view=_parlay_view[_preferred]
             st.dataframe(_parlay_view,use_container_width=True,hide_index=True)
