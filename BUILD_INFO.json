@@ -1,0 +1,32 @@
+{
+  "version": "3.0 Ultimate",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "odds_api.py": "OK"
+  },
+  "smoke": {
+    "returncode": 0,
+    "stdout": "SMOKE_OK 0.6979 16",
+    "stderr": "Spreadsheet runtime warmup failed during python startup\nTraceback (most recent call last):\n  File \"/tmp/tmp.L2TH2Y5coc/artifact_tool_v2-2.8.22/artifact_tool/patches/warm_spreadsheet_runtime_on_startup.py\", line 26, in warm_spreadsheet_runtime_on_startup\n  File \"/tmp/tmp.L2TH2Y5coc/artifact_tool_v2-2.8.22/artifact_tool/spreadsheet_warmup.py\", line 772, in warm_spreadsheet_runtime\n  File \"/tmp/tmp.L2TH2Y5coc/artifact_tool_v2-2.8.22/artifact_tool/rpc/connection.py\", line 37, in get_or_create_client\n  File \"/tmp/tmp.L2TH2Y5coc/artifact_tool_v2-2.8.22/artifact_tool/rpc/daemon.py\", line 124, in start_daemon\nTimeoutError: Timed out waiting for artifact tool daemon socket. Set ARTIFACT_TOOL_RPC_DAEMON_STARTUP_TIMEOUT_S=<seconds> to increase the limit."
+  },
+  "features": [
+    "NBA",
+    "NFL",
+    "live internet odds",
+    "moneyline",
+    "spreads",
+    "totals",
+    "player search",
+    "NBA recent-stat props",
+    "NFL nflverse props",
+    "best-book prices",
+    "SQLite learning",
+    "2-16 leg parlays",
+    "16-leg longshot optimizer"
+  ]
+}

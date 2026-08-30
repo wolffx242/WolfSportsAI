@@ -1,0 +1,26 @@
+{
+  "version": "6.0 Cloud Edition",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "smoke": {
+    "returncode": 0,
+    "stdout": "CLOUD_SMOKE_OK 16"
+  },
+  "security": {
+    "real_env_removed": true,
+    "streamlit_secrets_template_only": true,
+    "gitignore_excludes_secrets": true
+  },
+  "entrypoint": "streamlit_app.py"
+}

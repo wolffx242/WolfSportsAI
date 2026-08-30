@@ -1,0 +1,13 @@
+{
+  "version": "4.1 Permission Fix",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "odds_api.py": "OK"
+  },
+  "fix": "API key now stored in Windows LocalAppData instead of app .env"
+}

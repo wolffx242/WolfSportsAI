@@ -1,0 +1,19 @@
+WolfSportsAI V4.1 Permission Fix
+
+This version no longer writes the API key into .env inside the extracted app folder.
+
+Instead it stores settings here on Windows:
+%LOCALAPPDATA%\WolfSportsAI\settings.json
+
+This avoids WinError 5 / Access is denied errors commonly caused by:
+- Downloads folder protections
+- antivirus/Windows Defender
+- read-only extracted folders
+- python-dotenv atomic file replacement
+
+Steps:
+1. Run run_windows.bat
+2. Open Settings
+3. Paste The Odds API key
+4. Click Save API key
+5. Restart WolfSportsAI

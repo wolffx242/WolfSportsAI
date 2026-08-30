@@ -1,0 +1,13 @@
+WolfSportsAI V5.1 Navigation Fix
+
+Fixed:
+StreamlitAPIException:
+st.session_state.nav cannot be modified after the widget with key nav is instantiated.
+
+What changed:
+- Clicking a game now writes "pending_nav" instead of directly changing "nav".
+- Streamlit reruns.
+- pending_nav is applied before the sidebar navigation widget is created.
+- Added a Back to Best Bets button in Game Center using the same safe navigation method.
+
+No API key or model data changes were made.

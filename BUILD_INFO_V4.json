@@ -1,0 +1,23 @@
+{
+  "version": "4.0 UI Redesign",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "odds_api.py": "OK"
+  },
+  "major_changes": [
+    "Outlier-inspired dark betting terminal UX",
+    "sidebar navigation",
+    "pick cards",
+    "better filters",
+    "player lab redesign",
+    "prop scanner redesign",
+    "parlay builder redesign",
+    "API status and metrics",
+    "keeps V3 modeling backend"
+  ]
+}

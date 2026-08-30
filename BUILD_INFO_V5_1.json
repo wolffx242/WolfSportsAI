@@ -1,0 +1,20 @@
+{
+  "version": "5.1",
+  "fix": "Streamlit navigation state bug",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK"
+  },
+  "checks": {
+    "direct_nav_assignment_in_open_game_removed": true,
+    "pending_nav_present": true,
+    "pending_nav_consumed_before_radio": true
+  }
+}
