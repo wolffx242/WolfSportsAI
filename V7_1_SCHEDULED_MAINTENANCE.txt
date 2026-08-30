@@ -1,0 +1,33 @@
+WolfSportsAI V7.1 Scheduled Maintenance
+
+Performance change:
+- Continuous AI learning is disabled.
+- The background thread now only checks the clock once per minute.
+- Maintenance uses America/Nassau (Bahamas) local time.
+
+Maintenance windows:
+1. 07:00–07:30
+   - refresh odds/results
+   - personnel-context refresh hook
+   - incremental learning only when changed data warrants it
+
+2. 16:00–16:30
+   - refresh odds/results
+   - personnel-context refresh hook
+   - incremental learning only when changed data warrants it
+
+3. 01:00–04:00
+   - full historical maintenance/bootstrap when needed
+   - model retraining
+   - backtesting/validation
+   - database/model housekeeping
+
+Outside these windows:
+- no continuous retraining/backtesting
+- UI primarily serves cached/current database data
+- significantly lower contention with public users
+
+Important personnel-data note:
+The current core providers do not guarantee complete NBA/NFL injury and confirmed
+starting-lineup feeds. A provider hook is included so a dedicated injuries/lineups
+API can be attached cleanly without affecting the dashboard architecture.

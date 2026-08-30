@@ -329,7 +329,7 @@ with st.sidebar:
         format_func=lambda x:f"{x} min"
     )
     st.caption("Fast mode: normal clicks use cached/local data.")
-    st.caption("Turbo Autopilot: parallel NBA/NFL refresh + change detection.")
+    st.caption("Scheduled mode: heavy AI work runs during low-traffic maintenance windows.")
 
     if KEY:
         st.markdown('<div class="status-pill">● API Connected</div>',unsafe_allow_html=True)
@@ -341,9 +341,9 @@ with st.sidebar:
     st.caption("AUTOPILOT")
     _ap_thread = st.session_state.get("_autopilot_thread")
     if _ap_thread and _ap_thread.is_alive():
-        st.markdown('<div class="status-pill">● AI Autopilot Running</div>',unsafe_allow_html=True)
+        st.markdown('<div class="status-pill">● Scheduled AI Maintenance</div>',unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-pill off">● Autopilot Starting</div>',unsafe_allow_html=True)
+        st.markdown('<div class="status-pill off">● Scheduler Starting</div>',unsafe_allow_html=True)
     st.caption(f"Cycles: {int(ap.get('cycle_count') or 0)}")
 
 # ---------- FAST DATA CACHE ----------
@@ -1272,9 +1272,11 @@ elif page=="⚙️ Settings":
                 st.info("For cloud deployment, add ODDS_API_KEY in Streamlit Secrets.")
     st.divider()
     st.subheader("Autopilot")
+
+    st.info("Speed mode: model learning, historical updates and maintenance are scheduled for low-traffic windows. Outside those windows the dashboard primarily serves cached data and predictions.")
     st.write("Automatic schedule while WolfSportsAI is open:")
     st.write("• Odds/results refresh: every 15 minutes")
-    st.write("• Model retraining: every 4 hours, or immediately when new completed games arrive")
+    st.write("• Afternoon maintenance: 4:00–4:30 PM (Bahamas time)")
     st.write("• Backtesting: every 6 hours")
     st.caption("On a free cloud host, Autopilot runs while the app instance is awake. Free hosts may sleep/restart inactive apps; WolfSportsAI rebuilds its historical model state when needed.")
     st.subheader("Data sources")

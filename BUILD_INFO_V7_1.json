@@ -1,0 +1,24 @@
+{
+  "version": "7.1 Scheduled Maintenance",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "checks": {
+    "bahamas_timezone": true,
+    "morning_window": true,
+    "afternoon_window": true,
+    "overnight_window": true,
+    "scheduled_only_loop": true,
+    "personnel_hook": true
+  }
+}

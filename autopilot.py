@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import json
 import threading
@@ -24,6 +25,8 @@ _THREAD=None
 _STOP=threading.Event()
 _BOOTSTRAP_ATTEMPT={}
 _LAST_COMPLETED_COUNTS={}
+APP_TZ=ZoneInfo("America/Nassau")
+_LAST_WINDOW_RUN={}
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -204,33 +207,118 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
     finally:
         _LOCK.release()
 
-def _loop(api_key,sports,refresh_minutes,retrain_hours,backtest_hours):
-    # Run once shortly after startup, then periodically.
+
+def local_now():
+    return datetime.now(APP_TZ)
+
+def maintenance_window(now=None):
+    """Return active maintenance window in America/Nassau, or None."""
+    now = now or local_now()
+    minutes = now.hour * 60 + now.minute
+
+    # Morning quick maintenance: 07:00–07:30.
+    if 7*60 <= minutes < 7*60+30:
+        return "morning"
+
+    # Afternoon quick maintenance: 16:00–16:30.
+    if 16*60 <= minutes < 16*60+30:
+        return "afternoon"
+
+    # Overnight heavy maintenance: 01:00–04:00.
+    if 1*60 <= minutes < 4*60:
+        return "overnight"
+
+    return None
+
+def _window_key(window, now=None):
+    now = now or local_now()
+    return f"{now.date().isoformat()}:{window}"
+
+
+def refresh_personnel_context(sports=("NBA","NFL")):
+    """
+    Scheduled personnel refresh hook.
+
+    WolfSportsAI's current core providers reliably supply games, results,
+    historical stats and odds. Injury/starting-lineup coverage varies by
+    league/source. This hook records the maintenance attempt and is the
+    single place to attach a dedicated injuries/lineups provider later
+    without touching the user-facing UI.
+    """
+    # Keep this non-blocking and provider-safe for now.
+    return {
+        "sports": list(sports),
+        "checked_at": iso(),
+        "injuries": "provider-dependent",
+        "rosters": "provider-dependent",
+        "lineups": "provider-dependent",
+    }
+
+def scheduled_cycle(api_key, sports=("NBA","NFL")):
+    """Run only the work assigned to the active maintenance window."""
+    now = local_now()
+    window = maintenance_window(now)
+    if not window:
+        return {"status":"idle","window":None}
+
+    key = _window_key(window, now)
+    if _LAST_WINDOW_RUN.get(window) == key:
+        return {"status":"already_ran","window":window}
+
+    # Mark first so Streamlit reruns cannot start duplicate maintenance.
+    _LAST_WINDOW_RUN[window] = key
+
+    if window in ("morning","afternoon"):
+        personnel = refresh_personnel_context(sports)
+        # Quick windows: fresh lines/results and incremental model update.
+        # No historical bootstrap or duplicate full backtest.
+        result = run_cycle(
+            api_key=api_key,
+            sports=sports,
+            refresh_minutes=0,
+            retrain_hours=9999,
+            backtest_hours=9999,
+            bootstrap_if_missing=False
+        )
+        result["window"]=window
+        result["personnel"]=personnel
+        return result
+
+    personnel = refresh_personnel_context(sports)
+    # Overnight: full maintenance. Historical bootstrap if missing,
+    # retraining, validation/backtesting and all database/model housekeeping.
+    result = run_cycle(
+        api_key=api_key,
+        sports=sports,
+        refresh_minutes=0,
+        retrain_hours=0,
+        backtest_hours=0,
+        bootstrap_if_missing=True
+    )
+    result["window"]="overnight"
+    result["personnel"]=personnel
+    return result
+
+def _loop(api_key,sports):
+    # Check schedule once per minute. Heavy work only starts inside maintenance windows.
     while not _STOP.is_set():
         try:
-            run_cycle(
-                api_key=api_key,
-                sports=sports,
-                refresh_minutes=refresh_minutes,
-                retrain_hours=retrain_hours,
-                backtest_hours=backtest_hours,
-                bootstrap_if_missing=True
-            )
+            scheduled_cycle(api_key, sports)
         except Exception:
             pass
-        # Wake every 5 minutes; due() decides what work actually needs doing.
         _STOP.wait(60)
 
 def start_worker(api_key,sports=("NBA","NFL"),refresh_minutes=5,retrain_hours=4,backtest_hours=12):
+    """Start lightweight scheduler. Parameters retained for backward compatibility."""
     global _THREAD
     if _THREAD and _THREAD.is_alive():
         return _THREAD
     _STOP.clear()
     _THREAD=threading.Thread(
         target=_loop,
-        args=(api_key,tuple(sports),int(refresh_minutes),int(retrain_hours),int(backtest_hours)),
+        args=(api_key,tuple(sports)),
         daemon=True,
-        name="WolfSportsAI-Autopilot"
+        name="WolfSportsAI-Scheduled-Maintenance"
     )
     _THREAD.start()
     return _THREAD
