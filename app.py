@@ -62,7 +62,7 @@ def _start_autopilot_worker(api_key):
         sports=("NBA","NFL"),
         refresh_minutes=15,
         retrain_hours=12,
-        backtest_hours=6
+        backtest_hours=12
     )
 
 # Do not start network/background work before Streamlit paints the page.
@@ -284,10 +284,18 @@ with st.sidebar:
     st.divider()
     st.caption("LIVE ENGINE")
     sports=st.multiselect("Leagues",["NBA","NFL"],default=["NBA","NFL"])
-    auto=st.toggle("Auto refresh",True)
-    mins=st.select_slider("Refresh interval",options=[5,10,15,20,30,45,60],value=15,format_func=lambda x:f"{x} min")
-    if auto:
-        st_autorefresh(interval=mins*60*1000,key="wolf_auto")
+    auto=st.toggle(
+        "Background refresh",
+        True,
+        help="Autopilot updates data without repeatedly reloading the whole page."
+    )
+    mins=st.select_slider(
+        "Refresh target",
+        options=[10,15,20,30,45,60],
+        value=15,
+        format_func=lambda x:f"{x} min"
+    )
+    st.caption("Fast mode: normal clicks use cached/local data.")
 
     if KEY:
         st.markdown('<div class="status-pill">● API Connected</div>',unsafe_allow_html=True)
@@ -304,20 +312,46 @@ with st.sidebar:
         st.markdown('<div class="status-pill off">● Autopilot Starting</div>',unsafe_allow_html=True)
     st.caption(f"Cycles: {int(ap.get('cycle_count') or 0)}")
 
+# ---------- FAST DATA CACHE ----------
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_featured(sport, api_key):
+    return featured(sport, api_key)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_scores(sport, api_key):
+    return scores(sport, api_key)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_events(sport, api_key):
+    return events(sport, api_key)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_event_props(sport, event_id, api_key):
+    return event_props(sport, event_id, api_key)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_stat_series(sport, player_name, market, n=20):
+    vals, resolved = stat_series(sport, player_name, market, n)
+    return [float(v) for v in list(vals)], resolved
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_snapshot(sport):
+    return read_sql("""SELECT * FROM market_snapshots WHERE sport=? AND captured_at=
+      (SELECT MAX(captured_at) FROM market_snapshots WHERE sport=?)""",(sport,sport))
+
 # ---------- DATA ----------
 def cache(s):
-    return read_sql("""SELECT * FROM market_snapshots WHERE sport=? AND captured_at=
-      (SELECT MAX(captured_at) FROM market_snapshots WHERE sport=?)""",(s,s))
+    return cached_snapshot(s).copy()
 
 def refresh():
     frames=[];errs=[]
     for s in sports:
         try:
-            d,_=featured(s,KEY)
+            d,_=cached_featured(s,KEY)
             if len(d):
                 append_df("market_snapshots",d)
                 frames.append(d)
-            sc,_=scores(s,KEY)
+            sc,_=cached_scores(s,KEY)
             if len(sc):
                 upsert_results(sc)
         except Exception as e:
@@ -339,7 +373,7 @@ def score_props(pc,namefilter=None):
         sp=np.nan;meta={}
         try:
             if key not in cache_stats:
-                vals,res=stat_series(r.sport,r.player_name,r.market,20)
+                vals,res=cached_stat_series(r.sport,r.player_name,r.market,20)
                 cache_stats[key]=vals
             vals=cache_stats[key]
             sp,meta=perf_prob(vals,r.point,r.side)
@@ -357,13 +391,24 @@ def score_props(pc,namefilter=None):
         rows.append(rr)
     return enrich(pd.DataFrame(rows)) if rows else pd.DataFrame()
 
-if KEY and st.session_state.raw.empty:
-    try:
-        st.session_state.raw,_=refresh()
-    except Exception:
-        pass
+# IMPORTANT: never call an external API before the selected page renders.
+# On first load use the newest locally stored snapshot only.
+if st.session_state.raw.empty:
+    _frames=[]
+    for _sport in sports:
+        try:
+            _d=cache(_sport)
+            if _d is not None and len(_d):
+                _frames.append(_d)
+        except Exception:
+            pass
+    if _frames:
+        st.session_state.raw=pd.concat(_frames,ignore_index=True)
 
-team=enrich(apply(team_consensus(st.session_state.raw)))
+if len(st.session_state.raw):
+    team=enrich(apply(team_consensus(st.session_state.raw)))
+else:
+    team=pd.DataFrame()
 
 # ---------- SHARED UI ----------
 def grade_class(g):
@@ -603,7 +648,7 @@ def prop_list_cards(df,limit=18):
 
 def prop_history_chart(sport,player,market,line,side,games=10):
     try:
-        vals,_=stat_series(sport,player,market,max(5,games))
+        vals,_=cached_stat_series(sport,player,market,max(5,games))
     except Exception:
         vals=[]
     vals=list(vals)[-games:] if vals is not None else []
@@ -683,9 +728,13 @@ if page=="🔥 Best Bets":
         search_game=st.text_input("Search games",placeholder="Search team name...")
     with b:
         if st.button("↻ Refresh live board",type="primary",use_container_width=True,disabled=not bool(KEY)):
-            with st.spinner("Refreshing sportsbook lines and scores..."):
+            cached_featured.clear()
+            cached_scores.clear()
+            cached_snapshot.clear()
+            with st.spinner("Getting fresh sportsbook lines..."):
                 st.session_state.raw,errs=refresh()
-            for e in errs: st.warning(e)
+            for e in errs:
+                st.warning(e)
             st.rerun()
     if search_game and len(filtered_board):
         s=search_game.strip().lower()
@@ -695,7 +744,21 @@ if page=="🔥 Best Bets":
         ]
     metric_cards()
     st.markdown('<div class="terminal-label">TODAY / LIVE BOARD</div>',unsafe_allow_html=True)
-    game_market_board(filtered_board,"bestboard",16)
+    if filtered_board is None or filtered_board.empty:
+        st.markdown("""
+        <div class="hero-match">
+          <div class="hero-match-title">WolfSportsAI is ready</div>
+          <div class="hero-match-sub">The interface loads immediately. Live odds are refreshed by Autopilot in the background.</div>
+          <div class="hero-match-stats">
+            <div class="hero-stat"><span>NBA</span><strong>Enabled</strong></div>
+            <div class="hero-stat"><span>NFL</span><strong>Enabled</strong></div>
+            <div class="hero-stat"><span>Live Engine</span><strong>Starting</strong></div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.info("No cached sportsbook rows are available yet. Give Autopilot a moment, then click Refresh live board once.")
+    else:
+        game_market_board(filtered_board,"bestboard",16)
     st.divider()
     with st.expander("Show ranked AI opportunities"):
         pick_cards(filtered_board,10)
@@ -851,10 +914,10 @@ elif page=="👤 Player Lab":
         frames=[]
         with st.spinner("Loading current props and recent player performance..."):
             try:
-                ev,_=events(sp,KEY)
+                ev,_=cached_events(sp,KEY)
                 for e in ev[:scan]:
                     try:
-                        p,_=event_props(sp,e["id"],KEY)
+                        p,_=cached_event_props(sp,e["id"],KEY)
                         if len(p):
                             append_df("player_prop_snapshots",p)
                             frames.append(p)
@@ -902,10 +965,10 @@ elif page=="🔎 Prop Scanner":
         frames=[]
         with st.spinner("Fetching prop markets and evaluating recent player histories..."):
             try:
-                ev,_=events(sp,KEY)
+                ev,_=cached_events(sp,KEY)
                 for e in ev[:n]:
                     try:
-                        p,_=event_props(sp,e["id"],KEY)
+                        p,_=cached_event_props(sp,e["id"],KEY)
                         if len(p):
                             append_df("player_prop_snapshots",p)
                             frames.append(p)

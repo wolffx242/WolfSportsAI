@@ -1,0 +1,13 @@
+WolfSportsAI V6.4 Instant-Load Cloud Fix
+
+Critical fixes:
+- Removed the old st_autorefresh loop that was still surviving in V6.3.
+- Removed the live Odds API call that was still executing BEFORE main-page rendering.
+- First paint now uses only local SQLite snapshot data and renders immediately.
+- Autopilot starts only after the page body has been built.
+- Network endpoints cached for 15 minutes.
+- Player stats cached for 1 hour.
+- Historical bootstrap retry throttled to 12 hours.
+- Backtesting aligned to 12-hour cadence.
+- Visible ready-state is shown even before first live odds snapshot arrives.
+- Manual Refresh live board remains available for an immediate pull.

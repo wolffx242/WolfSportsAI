@@ -1,0 +1,22 @@
+{
+  "version": "6.4 Instant Load",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "checks": {
+    "no_st_autorefresh_call": true,
+    "no_blocking_initial_refresh": true,
+    "cached_featured_present": true,
+    "empty_home_state_present": true
+  }
+}
