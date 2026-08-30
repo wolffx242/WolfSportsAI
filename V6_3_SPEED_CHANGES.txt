@@ -1,0 +1,18 @@
+WolfSportsAI V6.3 Speed Edition
+
+Performance changes:
+- Removed Streamlit auto-refresh reruns that repeatedly rebuilt the full interface.
+- First page render no longer waits for live API calls.
+- Uses the latest local odds snapshot immediately, then Autopilot updates in background.
+- Live featured odds cached for 15 minutes.
+- Scores cached for 15 minutes.
+- Events and event-level prop endpoints cached for 15 minutes.
+- Player stat histories cached for 1 hour.
+- NBA/NFL source log calls use process-level LRU caching.
+- Team consensus/model enrichment cached for 30 seconds.
+- Manual Refresh button clears live-data caches and forces a fresh pull.
+- Historical bootstrap failures are retried at most every 6 hours instead of every worker wake-up.
+- Automatic backtesting reduced from every 6 hours to every 12 hours, aligned with retraining,
+  preventing duplicate expensive model training cycles.
+- Autopilot remains automatic.
+- V6.2 visual sportsbook-style dashboard retained.

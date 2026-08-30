@@ -2,6 +2,7 @@
 from datetime import datetime
 import difflib
 import pandas as pd
+from functools import lru_cache
 
 NBA_SINGLE={
  "player_points":"PTS","player_rebounds":"REB","player_assists":"AST",
@@ -32,6 +33,7 @@ def _nba_series(df,m):
     c=NBA_SINGLE.get(m)
     return pd.to_numeric(df[c],errors="coerce") if c in df.columns else pd.Series(dtype=float)
 
+@lru_cache(maxsize=128)
 def nba_logs(name,n=20):
     from nba_api.stats.static import players
     from nba_api.stats.endpoints import playergamelog
@@ -57,6 +59,7 @@ def nba_logs(name,n=20):
     if df.empty: raise RuntimeError("No NBA logs returned.")
     return df.head(n).copy(),p["full_name"]
 
+@lru_cache(maxsize=128)
 def nfl_logs(name,n=20):
     import nflreadpy as nfl
     df=nfl.load_player_stats(seasons=None,summary_level="week").to_pandas()

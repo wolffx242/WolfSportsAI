@@ -21,6 +21,7 @@ from historical_bootstrap import (
 _LOCK=threading.Lock()
 _THREAD=None
 _STOP=threading.Event()
+_BOOTSTRAP_ATTEMPT={}
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -90,12 +91,16 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=15,
         # 2) Bootstrap historical data automatically if absent
         for sport in sports:
             hist_count=_historical_count(sport)
-            if bootstrap_if_missing and hist_count < (150 if sport=="NBA" else 100):
+            # Public history endpoints can be slow/rate-limited. Retry at most every 6 hours
+            # instead of hammering them every 5-minute worker wake-up.
+            _last_boot=_BOOTSTRAP_ATTEMPT.get(sport)
+            _boot_due=_last_boot is None or (utcnow()-_last_boot)>=timedelta(hours=6)
+            if bootstrap_if_missing and hist_count < (150 if sport=="NBA" else 100) and _boot_due:
+                _BOOTSTRAP_ATTEMPT[sport]=utcnow()
                 try:
                     seasons=4 if sport=="NBA" else 6
                     bootstrap_sport(sport,seasons)
                 except Exception as e:
-                    # Don't block all autopilot functions if public history source fails.
                     update_autopilot_status(last_error=f"{sport} bootstrap: {e}")
 
         # 3) Retrain automatically on a cadence
@@ -151,7 +156,7 @@ def _loop(api_key,sports,refresh_minutes,retrain_hours,backtest_hours):
         # Wake every 5 minutes; due() decides what work actually needs doing.
         _STOP.wait(300)
 
-def start_worker(api_key,sports=("NBA","NFL"),refresh_minutes=15,retrain_hours=12,backtest_hours=6):
+def start_worker(api_key,sports=("NBA","NFL"),refresh_minutes=15,retrain_hours=12,backtest_hours=12):
     global _THREAD
     if _THREAD and _THREAD.is_alive():
         return _THREAD
