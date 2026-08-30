@@ -1,0 +1,15 @@
+WolfSportsAI V7.2 Instant Market Tabs
+
+Critical speed changes:
+- team_consensus + team model apply + enrichment is cached for 15 minutes per exact odds snapshot.
+- Moneyline, Spread and Total sport slices are cached separately.
+- NBA/NFL market selector now runs inside st.fragment.
+- Clicking Moneyline / Spread / Total reruns only the market-board fragment, not the full app.
+- All market data is precomputed from the same in-memory team dataframe.
+- Manual live refresh invalidates relevant caches so new lines appear correctly.
+- Opening a matchup forces a full app rerun to navigate into Game Center.
+- V7.1 scheduled maintenance remains unchanged.
+
+Expected behavior:
+After the first NBA/NFL page load, market-tab switches should be near-instant because
+they no longer rerun consensus/model enrichment or the rest of the Streamlit page.

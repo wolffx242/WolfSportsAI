@@ -1,0 +1,23 @@
+{
+  "version": "7.2 Instant Market Tabs",
+  "compile": {
+    "analytics.py": "OK",
+    "database.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "app.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "parlay.py": "OK",
+    "game_center.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK"
+  },
+  "checks": {
+    "cached_team_model": true,
+    "cached_market_view": true,
+    "fragment_market_ui": true,
+    "old_direct_team_compute_removed": true,
+    "refresh_invalidates_model_cache": true
+  }
+}

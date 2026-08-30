@@ -373,6 +373,32 @@ def cached_snapshot(sport):
     return read_sql("""SELECT * FROM market_snapshots WHERE sport=? AND captured_at=
       (SELECT MAX(captured_at) FROM market_snapshots WHERE sport=?)""",(sport,sport))
 
+
+@st.cache_data(ttl=900, show_spinner=False, max_entries=8)
+def cached_team_model(raw_json):
+    """Expensive consensus + ML enrichment, computed once per odds snapshot."""
+    if not raw_json:
+        return pd.DataFrame()
+    frame=pd.read_json(raw_json,orient="split")
+    if frame.empty:
+        return pd.DataFrame()
+    return enrich(apply(team_consensus(frame)))
+
+@st.cache_data(ttl=900, show_spinner=False, max_entries=16)
+def cached_market_view(team_json, sport, market):
+    """Prebuilt sport/market slice for instant tab switching."""
+    if not team_json:
+        return pd.DataFrame()
+    frame=pd.read_json(team_json,orient="split")
+    if frame.empty:
+        return frame
+    out=frame
+    if sport and sport!="All":
+        out=out[out["sport"].astype(str).eq(str(sport))]
+    if market and market!="All":
+        out=out[out["market"].astype(str).eq(str(market))]
+    return out.reset_index(drop=True)
+
 # ---------- DATA ----------
 def cache(s):
     return cached_snapshot(s).copy()
@@ -440,9 +466,12 @@ if st.session_state.raw.empty:
         st.session_state.raw=pd.concat(_frames,ignore_index=True)
 
 if len(st.session_state.raw):
-    team=enrich(apply(team_consensus(st.session_state.raw)))
+    _raw_json=st.session_state.raw.to_json(orient="split",date_format="iso")
+    team=cached_team_model(_raw_json).copy()
+    _team_json=team.to_json(orient="split",date_format="iso") if len(team) else ""
 else:
     team=pd.DataFrame()
+    _team_json=""
 
 # ---------- SHARED UI ----------
 def grade_class(g):
@@ -499,7 +528,7 @@ def betting_filter_bar(df, key_prefix="marketfilter"):
             disabled=market_choice not in ("All","Total")
         )
 
-    out=df.copy()
+    out=df
 
     if league_choice and league_choice!="All" and "sport" in out.columns:
         out=out[out["sport"].astype(str).str.upper()==league_choice]
@@ -812,7 +841,10 @@ def prop_history_chart(sport,player,market,line,side,games=10):
 def open_game(event_id):
     st.session_state.selected_event_id=event_id
     st.session_state.pending_nav="🎯 Game Center"
-    st.rerun()
+    try:
+        st.rerun(scope="app")
+    except Exception:
+        st.rerun()
 
 def game_buttons(df,keyprefix):
     if df is None or df.empty:
@@ -858,6 +890,40 @@ def line_book_table(raw,event_id,market_key):
     show=x[["bookmaker","outcome","point","price"]].sort_values(["outcome","price"],ascending=[True,False])
     st.dataframe(show,use_container_width=True,hide_index=True)
 
+
+@st.fragment
+def league_market_fragment(sport, team_json):
+    """Only this section reruns when the user switches Moneyline/Spread/Total."""
+    m1,m2=st.columns([1.4,1])
+    with m1:
+        league_market=st.segmented_control(
+            "Market",
+            ["Moneyline","Spread","Total","All"],
+            default="Moneyline",
+            key=f"{sport}_manual_market"
+        )
+    with m2:
+        total_side=st.segmented_control(
+            "Totals",
+            ["Both","Over","Under"],
+            default="Both",
+            key=f"{sport}_manual_total",
+            disabled=league_market not in ("All","Total")
+        )
+
+    d=cached_market_view(team_json,sport,league_market).copy()
+
+    if total_side!="Both" and len(d):
+        is_total=d.market.astype(str).eq("Total")
+        d=d[(~is_total)|d.selection.astype(str).str.lower().eq(total_side.lower())]
+
+    game_market_board(
+        d,
+        f"{sport.lower()}board",
+        18,
+        league_market if league_market!="All" else None
+    )
+
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
     top_header("Games","Live NBA & NFL board with AI probability, best price and fast matchup drilldowns.")
@@ -871,6 +937,8 @@ if page=="🔥 Best Bets":
             cached_featured.clear()
             cached_scores.clear()
             cached_snapshot.clear()
+            cached_team_model.clear()
+            cached_market_view.clear()
             with st.spinner("Getting fresh sportsbook lines..."):
                 st.session_state.raw,errs=refresh()
             for e in errs:
@@ -905,30 +973,11 @@ if page=="🔥 Best Bets":
 
 elif page in ("🏀 NBA","🏈 NFL"):
     sport="NBA" if "NBA" in page else "NFL"
-    top_header(f"{sport} Games",f"Choose exactly what you want to see: moneyline, spread, over or under.")
-    d=team[team.sport.eq(sport)] if len(team) else team
-    m1,m2=st.columns([1.4,1])
-    with m1:
-        league_market=st.segmented_control(
-            "Market",
-            ["Moneyline","Spread","Total","All"],
-            default="Moneyline",
-            key=f"{sport}_manual_market"
-        )
-    with m2:
-        total_side=st.segmented_control(
-            "Totals",
-            ["Both","Over","Under"],
-            default="Both",
-            key=f"{sport}_manual_total",
-            disabled=league_market not in ("All","Total")
-        )
-    if league_market!="All" and len(d):
-        d=d[d.market.eq(league_market)]
-    if total_side!="Both" and len(d):
-        is_total=d.market.eq("Total")
-        d=d[(~is_total)|d.selection.astype(str).str.lower().eq(total_side.lower())]
-    game_market_board(d,f"{sport.lower()}board",18)
+    top_header(
+        f"{sport} Games",
+        "Instant market switching — Moneyline, Spread and Total are precomputed from the same loaded odds snapshot."
+    )
+    league_market_fragment(sport,_team_json)
 
 elif page=="🎯 Game Center":
     top_header("Game Center","Open one matchup and drill into moneyline, spread, totals and recent-form evidence.")
