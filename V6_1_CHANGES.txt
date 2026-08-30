@@ -1,0 +1,10 @@
+WolfSportsAI V6.1 Cloud Hotfix
+
+Changes:
+- Fixes blank-main-screen startup by delaying Autopilot startup until after UI rendering.
+- Adds user-controlled league filter: All / NBA / NFL.
+- Adds user-controlled bet type filter: All / Moneyline / Spread / Total.
+- Adds Total direction filter: Both / Over / Under.
+- Adds dedicated NBA and NFL market selector controls.
+- Keeps Autopilot automatic; no training/backtest buttons required for normal operation.
+- Keeps Streamlit Secrets API-key protection.

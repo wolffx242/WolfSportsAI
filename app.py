@@ -64,7 +64,9 @@ def _start_autopilot_worker(api_key):
         backtest_hours=6
     )
 
-AUTOPILOT_THREAD = _start_autopilot_worker(KEY)
+# Do not start network/background work before Streamlit paints the page.
+# The worker is started near the end of the script after the selected page renders.
+AUTOPILOT_THREAD = None
 
 st.set_page_config(
     page_title="WolfSportsAI",
@@ -199,10 +201,11 @@ with st.sidebar:
     st.divider()
     ap=get_autopilot_status()
     st.caption("AUTOPILOT")
-    if AUTOPILOT_THREAD and AUTOPILOT_THREAD.is_alive():
+    _ap_thread = st.session_state.get("_autopilot_thread")
+    if _ap_thread and _ap_thread.is_alive():
         st.markdown('<div class="status-pill">● AI Autopilot Running</div>',unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-pill off">● Autopilot Stopped</div>',unsafe_allow_html=True)
+        st.markdown('<div class="status-pill off">● Autopilot Starting</div>',unsafe_allow_html=True)
     st.caption(f"Cycles: {int(ap.get('cycle_count') or 0)}")
 
 # ---------- DATA ----------
@@ -287,6 +290,57 @@ def top_header(title,subtitle):
         </div>""",
         unsafe_allow_html=True
     )
+
+
+def betting_filter_bar(df, key_prefix="marketfilter"):
+    """User-controlled league/market/direction filtering."""
+    if df is None or len(df) == 0:
+        return df
+
+    c1,c2,c3=st.columns([1.1,1.5,1.4])
+
+    with c1:
+        league_choice=st.segmented_control(
+            "League",
+            ["All","NBA","NFL"],
+            default="All",
+            key=f"{key_prefix}_league"
+        )
+
+    with c2:
+        market_choice=st.segmented_control(
+            "Bet type",
+            ["All","Moneyline","Spread","Total"],
+            default="All",
+            key=f"{key_prefix}_market"
+        )
+
+    with c3:
+        total_side=st.segmented_control(
+            "Total side",
+            ["Both","Over","Under"],
+            default="Both",
+            key=f"{key_prefix}_totalside",
+            disabled=market_choice not in ("All","Total")
+        )
+
+    out=df.copy()
+
+    if league_choice and league_choice!="All" and "sport" in out.columns:
+        out=out[out["sport"].astype(str).str.upper()==league_choice]
+
+    market_map={"Moneyline":"h2h","Spread":"spreads","Total":"totals"}
+    if market_choice and market_choice!="All" and "market" in out.columns:
+        out=out[out["market"].astype(str).str.lower()==market_map[market_choice]]
+
+    # Only apply Over/Under direction to rows that are totals.
+    if total_side and total_side!="Both" and "market" in out.columns and "selection" in out.columns:
+        is_total=out["market"].astype(str).str.lower().eq("totals")
+        side_match=out["selection"].astype(str).str.lower().str.startswith(total_side.lower())
+        out=out[(~is_total) | side_match]
+
+    st.caption(f"Showing {len(out):,} of {len(df):,} available betting opportunities.")
+    return out
 
 def metric_cards():
     total_rows=count("market_snapshots")
@@ -416,6 +470,7 @@ def line_book_table(raw,event_id,market_key):
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
     top_header("Best Bets","Your highest-rated NBA and NFL opportunities in one place.")
+    st.markdown("### Choose league and bet type")
     if _secret_api_key():
         st.caption("☁️ Cloud mode ready • server-side API key protected • public dashboard")
 
@@ -798,3 +853,12 @@ elif page=="⚙️ Settings":
     st.subheader("Local database")
     st.code(str((ROOT/"data"/"wolfsports.db").resolve()))
     st.caption("All local learning history remains on your computer.")
+
+
+# Start Autopilot only after the page UI has been built.
+# This keeps slow APIs/history bootstrap from blocking the first cloud render.
+if KEY and "_autopilot_thread" not in st.session_state:
+    try:
+        st.session_state["_autopilot_thread"] = _start_autopilot_worker(KEY)
+    except Exception as _ap_start_error:
+        st.session_state["_autopilot_start_error"] = str(_ap_start_error)
