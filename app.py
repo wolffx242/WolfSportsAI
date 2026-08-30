@@ -924,6 +924,63 @@ def league_market_fragment(sport, team_json):
         league_market if league_market!="All" else None
     )
 
+
+def friendly_pick_label(row):
+    """Turn raw market data into a sportsbook-style pick description."""
+    market=str(row.get("market","")).strip().lower()
+    selection=str(row.get("selection","")).strip()
+    away=str(row.get("away_team","")).strip()
+    home=str(row.get("home_team","")).strip()
+
+    point=row.get("line",np.nan)
+    if pd.isna(point):
+        point=row.get("point",np.nan)
+
+    matchup=f"{away}/{home}" if away and home else (away or home or "Game")
+
+    if market in ("moneyline","h2h"):
+        team=selection or "Team"
+        return f"{team} Moneyline"
+
+    if market in ("spread","spreads"):
+        team=selection or "Team"
+        if pd.notna(point):
+            try:
+                return f"{team} {float(point):+g}"
+            except Exception:
+                pass
+        return f"{team} Spread"
+
+    if market in ("total","totals"):
+        side="Over" if selection.lower().startswith("over") else (
+            "Under" if selection.lower().startswith("under") else selection.title()
+        )
+        if pd.notna(point):
+            try:
+                return f"{matchup} {side} {float(point):g}"
+            except Exception:
+                pass
+        return f"{matchup} {side}"
+
+    # Player props or other markets: preserve useful selection and line.
+    if pd.notna(point):
+        try:
+            return f"{selection} {float(point):g}".strip()
+        except Exception:
+            pass
+    return selection or str(row.get("market","Pick")).title()
+
+def friendly_market_name(value):
+    m=str(value).strip().lower()
+    return {
+        "h2h":"Moneyline",
+        "moneyline":"Moneyline",
+        "spreads":"Spread",
+        "spread":"Spread",
+        "totals":"Total",
+        "total":"Total",
+    }.get(m,str(value).title())
+
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
     top_header("Games","Live NBA & NFL board with AI probability, best price and fast matchup drilldowns.")
@@ -964,7 +1021,8 @@ if page=="🔥 Best Bets":
           </div>
         </div>
         """, unsafe_allow_html=True)
-        st.info("No cached sportsbook rows are available yet. Give Autopilot a moment, then click Refresh live board once.")
+        st.warning("⏳ WolfSportsAI is loading its AI models and preparing the live betting board. The first load can take a little longer while data is cached. Please give it a moment — once initialization finishes, Moneyline, Spread and Over/Under switching should be much faster.")
+        st.caption("You can leave this page open while initialization completes. If the board still has not appeared after a short wait, use Refresh live board once.")
     else:
         game_market_board(filtered_board,"bestboard",16,st.session_state.get("bestbets_filter_market"))
     st.divider()
@@ -1229,12 +1287,29 @@ elif page=="🧾 Parlay Builder":
             cols=[c for c in ["sport","leg_type","player_name","market","selection","line",
                               "best_price","best_book","Model %","Edge %","confidence",
                               "away_team","home_team"] if c in q.columns]
-            st.dataframe(q[cols],use_container_width=True,hide_index=True)
-            st.download_button("Download parlay sheet",q.to_csv(index=False).encode(),
+            st.caption("Pick names are formatted like a bet slip: team + market/line, or matchup + Over/Under total.")
+            _parlay_view=q[cols].copy()
+            if len(_parlay_view):
+                _parlay_view["Pick"]=_parlay_view.apply(friendly_pick_label,axis=1)
+                if "market" in _parlay_view.columns:
+                    _parlay_view["Bet Type"]=_parlay_view["market"].apply(friendly_market_name)
+                _rename={
+                    "best_price":"Odds",
+                    "best_book":"Sportsbook",
+                    "edge":"Edge %",
+                    "confidence":"Confidence",
+                    "away_team":"Away",
+                    "home_team":"Home"
+                }
+                _parlay_view=_parlay_view.rename(columns=_rename)
+                _preferred=["sport","Pick","Bet Type","Odds","Sportsbook","Edge %","Confidence","Away","Home"]
+                _preferred=[c for c in _preferred if c in _parlay_view.columns]
+                _parlay_view=_parlay_view[_preferred]
+            st.dataframe(_parlay_view,use_container_width=True,hide_index=True)
+            st.download_button("Download parlay sheet",_parlay_view.to_csv(index=False).encode(),
                                f"wolfsports_{legs}_leg_parlay.csv","text/csv")
     else:
         st.info("Choose your settings and build a parlay sheet.")
-
 elif page=="🧠 Model Lab":
     top_header("Model Lab","Autopilot continuously retrains and backtests while WolfSportsAI is running.")
     st.success("AI Autopilot is automatic. You do not need to press Train or Backtest. Manual controls below are only for forcing an immediate rebuild.")

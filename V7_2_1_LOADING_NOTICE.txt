@@ -1,0 +1,5 @@
+WolfSportsAI V7.2.1 Loading Notice
+- Added a prominent warning to the empty/initial loading state.
+- Explains that the first AI/model/cache initialization may take longer.
+- Tells users that Moneyline, Spread and Over/Under switching becomes faster after initialization.
+- Advises leaving the page open and using Refresh live board only if needed.

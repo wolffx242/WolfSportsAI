@@ -1,0 +1,12 @@
+WolfSportsAI V7.3 Friendly Parlay Builder
+
+Parlay usability improvements:
+- Replaces raw Selection display with a human-readable Pick column.
+- Moneyline examples: "Seattle Seahawks Moneyline"
+- Spread examples: "Arizona Cardinals +13.5"
+- Total examples: "Seattle Seahawks/Arizona Cardinals Under 45"
+- Adds readable Bet Type names.
+- Renames best_price -> Odds and best_book -> Sportsbook.
+- Keeps Edge %, Confidence, Away and Home context.
+- Downloaded parlay sheet uses the friendly display when applicable.
+- Existing V7.2.1 instant market tabs, scheduled maintenance and loading notice retained.
