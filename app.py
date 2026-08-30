@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import altair as alt
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
@@ -142,6 +143,101 @@ hr{border-color:var(--wolf-border);}
 @media(max-width:900px){
  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
  .pick-meta{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* V6.2 trading-terminal / sportsbook-inspired interaction layer */
+:root{
+  --wolf-aqua:#62e0cf;
+  --wolf-aqua-soft:#173d38;
+  --wolf-orange:#e76f34;
+  --wolf-card:#0b1015;
+  --wolf-card2:#10161c;
+  --wolf-line:#202a32;
+}
+.block-container{max-width:1700px;padding-left:1.35rem;padding-right:1.35rem}
+[data-testid="stSidebar"]{min-width:190px;max-width:230px}
+[data-testid="stSidebar"] .stRadio > div{gap:.15rem}
+[data-testid="stSidebar"] .stRadio label{
+  border-radius:9px;padding:.28rem .45rem;transition:.15s ease;
+}
+[data-testid="stSidebar"] .stRadio label:hover{background:#121920}
+.wolf-toolbar{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  border-bottom:1px solid var(--wolf-line);padding:0 0 12px;margin-bottom:12px
+}
+.wolf-tab{
+  border:1px solid #27333d;background:#0b1117;color:#aeb8c2;
+  border-radius:10px;padding:7px 12px;font-size:.78rem;font-weight:800
+}
+.game-row{
+  background:linear-gradient(180deg,#101419,#0b0f13);
+  border:1px solid #1e272f;border-radius:15px;padding:12px 14px;margin:10px 0;
+}
+.game-row-top{display:grid;grid-template-columns:minmax(190px,1.2fr) repeat(4,minmax(135px,1fr));gap:10px;align-items:stretch}
+.team-stack{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:4px 8px}
+.team-line{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.team-name{font-size:.92rem;font-weight:800;color:#f5f7fa}
+.team-meta{font-size:.69rem;color:#73818f;text-transform:uppercase;letter-spacing:.06em}
+.market-box{
+  position:relative;background:#0d1318;border:1px solid #202a32;border-radius:11px;
+  padding:10px;min-height:68px;overflow:hidden
+}
+.market-box:before{
+  content:"";position:absolute;left:0;top:0;right:0;height:3px;
+  background:linear-gradient(90deg,#50d6bd 0 55%,#d75d37 55% 72%,#52606a 72%)
+}
+.market-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.08em;color:#71808d;font-weight:800;margin-bottom:8px}
+.market-pick{font-size:.91rem;font-weight:850;color:#f4f7f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.market-odds{font-size:.77rem;color:#b9c5ce;margin-top:4px}
+.market-edge{font-size:.69rem;color:#54d9bd;margin-top:3px;font-weight:800}
+.game-row-foot{
+  display:flex;justify-content:space-between;gap:8px;align-items:center;
+  padding-top:10px;margin-top:10px;border-top:1px solid #182028
+}
+.terminal-label{font-size:.69rem;color:#73818f;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+.hit-strip{display:flex;gap:4px;margin-top:8px}
+.hit-dot{height:5px;flex:1;border-radius:999px;background:#26313a}
+.hit-dot.hit{background:#5ce0c3}.hit-dot.miss{background:#d65a3b}
+.player-prop-row{
+  display:grid;grid-template-columns:minmax(210px,1.6fr) .7fr .7fr .7fr .7fr;
+  gap:10px;align-items:center;background:#0d1217;border:1px solid #1d262e;
+  border-radius:12px;padding:11px 13px;margin:7px 0
+}
+.player-main{font-weight:850;color:#f3f6f8}
+.player-sub{font-size:.73rem;color:#81909d;margin-top:2px}
+.kpi-mini{font-size:.73rem;color:#81909d}
+.kpi-mini strong{display:block;color:#edf2f5;font-size:.86rem;margin-top:2px}
+.hero-match{
+  background:
+   radial-gradient(circle at 18% 5%,rgba(36,180,154,.26),transparent 28%),
+   radial-gradient(circle at 82% 0%,rgba(214,93,49,.25),transparent 32%),
+   #0d1217;
+  border:1px solid #273039;border-radius:18px;padding:20px;margin-bottom:14px
+}
+.hero-match-title{font-size:1.7rem;font-weight:900;text-align:center;color:#f6f8fa}
+.hero-match-sub{text-align:center;color:#82909c;font-size:.82rem;margin-top:4px}
+.hero-match-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.hero-stat{background:rgba(6,10,13,.62);border:1px solid #202a32;border-radius:12px;padding:12px;text-align:center}
+.hero-stat span{display:block;color:#768590;font-size:.67rem;text-transform:uppercase;font-weight:800}
+.hero-stat strong{display:block;color:#f4f7f9;font-size:1.08rem;margin-top:4px}
+.detail-card{background:#0c1116;border:1px solid #1d2730;border-radius:14px;padding:15px;margin:8px 0}
+.detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.detail-stat{background:#10161c;border-radius:10px;padding:10px}
+.detail-stat span{display:block;color:#71808c;font-size:.67rem;text-transform:uppercase;font-weight:800}
+.detail-stat strong{display:block;color:#f3f6f8;font-size:.94rem;margin-top:3px}
+@media(max-width:1100px){
+ .game-row-top{grid-template-columns:1fr 1fr}
+ .team-stack{grid-column:1/-1}
+ .player-prop-row{grid-template-columns:1fr 1fr}
+ .hero-match-stats,.detail-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+ .game-row-top,.player-prop-row,.hero-match-stats,.detail-grid{grid-template-columns:1fr}
+ .block-container{padding-left:.7rem;padding-right:.7rem}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -418,6 +514,116 @@ def filter_bar(df,key):
     return df[df.market.isin(markets)&df.confidence.astype(str).isin(grades)&(df.model_prob>=minp)&(df.edge>=mine)]
 
 
+
+def _first_market_row(g, market, selection=None):
+    if g is None or g.empty:
+        return None
+    q=g[g["market"].astype(str).str.lower().eq(market.lower())]
+    if selection is not None and len(q):
+        q=q[q["selection"].astype(str).str.lower().eq(selection.lower())]
+    if q.empty:
+        return None
+    q=q.sort_values(["model_prob","edge"],ascending=False)
+    return q.iloc[0]
+
+def _market_box(label,row):
+    if row is None:
+        return f"""<div class="market-box"><div class="market-label">{label}</div>
+        <div class="market-pick">No line</div><div class="market-odds">—</div></div>"""
+    line=""
+    if pd.notna(row.get("line",np.nan)):
+        if str(row.get("market","")).lower()=="spread":
+            line=f" {float(row.line):+g}"
+        elif str(row.get("market","")).lower()=="total":
+            line=f" {float(row.line):g}"
+    pick=f"{row.selection}{line}"
+    edge=float(row.get("edge",0) or 0)*100
+    return f"""<div class="market-box">
+      <div class="market-label">{label}</div>
+      <div class="market-pick">{pick}</div>
+      <div class="market-odds">{fmt_odds(row.best_price)} • {row.best_book or 'Best Book'}</div>
+      <div class="market-edge">AI {float(row.model_prob)*100:.0f}% • Edge {edge:+.1f}%</div>
+    </div>"""
+
+def game_market_board(df,keyprefix="board",limit=16):
+    """Compact game board inspired by pro odds terminals."""
+    if df is None or df.empty:
+        st.info("No live games match the selected filters.")
+        return
+    evs=df[["event_id","sport","away_team","home_team","commence_time"]].drop_duplicates("event_id").head(limit)
+    for _,ev in evs.iterrows():
+        g=df[df.event_id.eq(ev.event_id)]
+        ml=_first_market_row(g,"Moneyline")
+        spr=_first_market_row(g,"Spread")
+        ov=_first_market_row(g,"Total","Over")
+        un=_first_market_row(g,"Total","Under")
+        st.markdown(
+          f"""<div class="game-row">
+            <div class="game-row-top">
+              <div class="team-stack">
+                <div class="team-meta">{ev.sport} • {str(ev.commence_time)[:16]}</div>
+                <div class="team-line"><span class="team-name">{ev.away_team}</span><span class="team-meta">AWAY</span></div>
+                <div class="team-line"><span class="team-name">{ev.home_team}</span><span class="team-meta">HOME</span></div>
+              </div>
+              {_market_box("Moneyline",ml)}
+              {_market_box("Spread",spr)}
+              {_market_box("Over",ov)}
+              {_market_box("Under",un)}
+            </div>
+            <div class="game-row-foot">
+              <span class="terminal-label">AI model + best available book</span>
+              <span class="terminal-label">Match details →</span>
+            </div>
+          </div>""",unsafe_allow_html=True)
+        if st.button(f"Open {ev.away_team} @ {ev.home_team}",key=f"{keyprefix}_{ev.event_id}",use_container_width=True):
+            open_game(ev.event_id)
+
+def prop_list_cards(df,limit=18):
+    if df is None or df.empty:
+        st.info("No player props match the selected filters.")
+        return
+    q=df.sort_values(["model_prob","edge"],ascending=False).head(limit)
+    for _,r in q.iterrows():
+        hit = float(r.get("recent_hit_rate",np.nan))
+        hit_txt = "—" if pd.isna(hit) else f"{hit:.0%}"
+        avg = r.get("recent_average",np.nan)
+        avg_txt="—" if pd.isna(avg) else f"{float(avg):.1f}"
+        point = r.get("point",np.nan)
+        point_txt="—" if pd.isna(point) else f"{float(point):g}"
+        st.markdown(f"""<div class="player-prop-row">
+          <div>
+            <div class="player-main">{r.player_name}</div>
+            <div class="player-sub">{r.away_team} @ {r.home_team} • {r.side} {point_txt} {r.market}</div>
+          </div>
+          <div class="kpi-mini">Best Price<strong>{fmt_odds(r.best_price)}</strong></div>
+          <div class="kpi-mini">L5/L10 Hit<strong>{hit_txt}</strong></div>
+          <div class="kpi-mini">Recent Avg<strong>{avg_txt}</strong></div>
+          <div class="kpi-mini">AI Probability<strong>{float(r.model_prob):.0%}</strong></div>
+        </div>""",unsafe_allow_html=True)
+
+def prop_history_chart(sport,player,market,line,side,games=10):
+    try:
+        vals,_=stat_series(sport,player,market,max(5,games))
+    except Exception:
+        vals=[]
+    vals=list(vals)[-games:] if vals is not None else []
+    if not vals:
+        st.info("Recent game-by-game data is not available for this prop.")
+        return
+    d=pd.DataFrame({"Game":[f"G{i+1}" for i in range(len(vals))],"Value":[float(v) for v in vals]})
+    if str(side).lower()=="under":
+        d["Hit"]=d["Value"]<float(line)
+    else:
+        d["Hit"]=d["Value"]>float(line)
+    base=alt.Chart(d).encode(x=alt.X("Game:N",sort=None,title=None))
+    bars=base.mark_bar(cornerRadiusTopLeft=4,cornerRadiusTopRight=4).encode(
+        y=alt.Y("Value:Q",title=None),
+        color=alt.condition("datum.Hit",alt.value("#5ce0c3"),alt.value("#d65a3b")),
+        tooltip=["Game","Value","Hit"]
+    )
+    rule=alt.Chart(pd.DataFrame({"line":[float(line)]})).mark_rule(strokeDash=[4,4],color="#d8e0e5").encode(y="line:Q")
+    st.altair_chart((bars+rule).properties(height=310),use_container_width=True)
+
 def open_game(event_id):
     st.session_state.selected_event_id=event_id
     st.session_state.pending_nav="🎯 Game Center"
@@ -469,53 +675,57 @@ def line_book_table(raw,event_id,market_key):
 
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
-    top_header("Best Bets","Your highest-rated NBA and NFL opportunities in one place.")
-    st.markdown("### Choose league and bet type")
-    if _secret_api_key():
-        st.caption("☁️ Cloud mode ready • server-side API key protected • public dashboard")
-
-    metric_cards()
-    ap=get_autopilot_status()
-    bt=latest_backtests()
-    c1,c2,c3,c4=st.columns(4)
-    c1.metric("AI Autopilot","RUNNING" if (AUTOPILOT_THREAD and AUTOPILOT_THREAD.is_alive()) else "STOPPED")
-    c2.metric("Last NBA train",str(ap.get("last_retrain_nba") or "Waiting")[:19])
-    c3.metric("Last NFL train",str(ap.get("last_retrain_nfl") or "Waiting")[:19])
-    c4.metric("Last data refresh",str(ap.get("last_data_refresh") or "Waiting")[:19])
-    if ap.get("last_error"):
-        st.caption("Autopilot note: "+str(ap.get("last_error"))[:240])
-    a,b=st.columns([1,1])
+    top_header("Games","Live NBA & NFL board with AI probability, best price and fast matchup drilldowns.")
+    st.markdown("### Game filters")
+    filtered_board=betting_filter_bar(team,"bestbets_filter")
+    a,b=st.columns([1.4,.7])
     with a:
-        st.subheader("Board controls")
-        board_mode=st.segmented_control("View",["Cards","Table"],default="Cards")
+        search_game=st.text_input("Search games",placeholder="Search team name...")
     with b:
-        if st.button("↻ Refresh all live data",type="primary",use_container_width=True,disabled=not bool(KEY)):
-            with st.spinner("Refreshing sportsbook lines and recent scores..."):
+        if st.button("↻ Refresh live board",type="primary",use_container_width=True,disabled=not bool(KEY)):
+            with st.spinner("Refreshing sportsbook lines and scores..."):
                 st.session_state.raw,errs=refresh()
-            for e in errs:st.warning(e)
+            for e in errs: st.warning(e)
             st.rerun()
-    filtered=filter_bar(team,"best")
-    game_buttons(team,"bestgame")
-    st.subheader("Top opportunities")
-    if board_mode=="Cards":
-        pick_cards(filtered,10)
-    else:
-        market_table(filtered)
+    if search_game and len(filtered_board):
+        s=search_game.strip().lower()
+        filtered_board=filtered_board[
+          filtered_board.away_team.astype(str).str.lower().str.contains(s,na=False) |
+          filtered_board.home_team.astype(str).str.lower().str.contains(s,na=False)
+        ]
+    metric_cards()
+    st.markdown('<div class="terminal-label">TODAY / LIVE BOARD</div>',unsafe_allow_html=True)
+    game_market_board(filtered_board,"bestboard",16)
+    st.divider()
+    with st.expander("Show ranked AI opportunities"):
+        pick_cards(filtered_board,10)
 
 elif page in ("🏀 NBA","🏈 NFL"):
     sport="NBA" if "NBA" in page else "NFL"
-    top_header(sport,"Live moneyline, spread and total markets with model-vs-market edge.")
+    top_header(f"{sport} Games",f"Choose exactly what you want to see: moneyline, spread, over or under.")
     d=team[team.sport.eq(sport)] if len(team) else team
-    game_buttons(d,f"{sport.lower()}game")
-    filtered=filter_bar(d,sport.lower())
-    c1,c2=st.columns([1.4,1])
-    with c1:
-        st.subheader("Top picks")
-        pick_cards(filtered,6)
-    with c2:
-        st.subheader("Market board")
-        market_table(filtered)
-
+    m1,m2=st.columns([1.4,1])
+    with m1:
+        league_market=st.segmented_control(
+            "Market",
+            ["All","Moneyline","Spread","Total"],
+            default="All",
+            key=f"{sport}_manual_market"
+        )
+    with m2:
+        total_side=st.segmented_control(
+            "Totals",
+            ["Both","Over","Under"],
+            default="Both",
+            key=f"{sport}_manual_total",
+            disabled=league_market not in ("All","Total")
+        )
+    if league_market!="All" and len(d):
+        d=d[d.market.eq(league_market)]
+    if total_side!="Both" and len(d):
+        is_total=d.market.eq("Total")
+        d=d[(~is_total)|d.selection.astype(str).str.lower().eq(total_side.lower())]
+    game_market_board(d,f"{sport.lower()}board",18)
 
 elif page=="🎯 Game Center":
     top_header("Game Center","Open one matchup and drill into moneyline, spread, totals and recent-form evidence.")
@@ -533,19 +743,24 @@ elif page=="🎯 Game Center":
         else:
             b=evraw.iloc[0]
             sport=str(b.sport);home=str(b.home_team);away=str(b.away_team)
-            st.markdown(f"<h2 style='margin-bottom:3px'>{away} <span style='color:#8391a2'>@</span> {home}</h2>",unsafe_allow_html=True)
-            st.caption(f"{sport} • {b.commence_time}")
             packet=matchup_packet(sport,home,away)
             model=packet.get("model")
-
             if model:
-                c1,c2,c3,c4=st.columns(4)
-                c1.metric(f"{home} win",f"{model['home_win_prob']:.1%}")
-                c2.metric("Projected margin",f"{home} {model['pred_margin']:+.1f}")
-                c3.metric("Projected total",f"{model['pred_total']:.1f}")
-                c4.metric("Model","Historical Form")
+                st.markdown(f"""<div class="hero-match">
+                  <div class="hero-match-title">{away} @ {home}</div>
+                  <div class="hero-match-sub">{sport} • {b.commence_time}</div>
+                  <div class="hero-match-stats">
+                    <div class="hero-stat"><span>{home} win probability</span><strong>{model['home_win_prob']:.0%}</strong></div>
+                    <div class="hero-stat"><span>Projected margin</span><strong>{home} {model['pred_margin']:+.1f}</strong></div>
+                    <div class="hero-stat"><span>Projected total</span><strong>{model['pred_total']:.1f}</strong></div>
+                  </div>
+                </div>""",unsafe_allow_html=True)
             else:
-                st.info("Run Historical Bootstrap in Model Lab to unlock the matchup form model.")
+                st.markdown(f"""<div class="hero-match">
+                  <div class="hero-match-title">{away} @ {home}</div>
+                  <div class="hero-match-sub">{sport} • {b.commence_time}</div>
+                </div>""",unsafe_allow_html=True)
+                st.info("Historical matchup model is still building.")
 
             market_tabs=st.tabs(["H2H / Moneyline","Spread","Total O/U","Head-to-Head Games"])
             with market_tabs[0]:
@@ -653,17 +868,27 @@ elif page=="👤 Player Lab":
     p=st.session_state.player
     if len(p):
         q=p.sort_values(["model_prob","edge"],ascending=False)
-        st.subheader(f"Player opportunities")
-        pick_cards(q.rename(columns={"side":"_side"}),8)
-        q2=q.copy()
-        q2["Model %"]=(q2.model_prob*100).round(1)
-        q2["Edge %"]=(q2.edge*100).round(1)
-        q2["Hit %"]=(q2.recent_hit_rate*100).round(1)
-        st.subheader("Detailed prop breakdown")
-        st.dataframe(q2[["player_name","market","side","point","best_price","best_book",
-                         "Model %","Edge %","games_used","recent_average","Hit %",
-                         "confidence","away_team","home_team"]],
-                     use_container_width=True,hide_index=True)
+        st.subheader("Player opportunities")
+        prop_list_cards(q,14)
+        labels=[]
+        for i,r in q.head(25).iterrows():
+            labels.append(f"{r.player_name} • {r.side} {float(r.point):g} {r.market}")
+        choice=st.selectbox("Open detailed prop view",labels,key="player_detail_pick")
+        idx=labels.index(choice)
+        r=q.head(25).iloc[idx]
+        st.markdown(f"""<div class="hero-match">
+          <div class="hero-match-title">{r.player_name}</div>
+          <div class="hero-match-sub">{r.away_team} @ {r.home_team} • {r.side} {float(r.point):g} {r.market}</div>
+          <div class="hero-match-stats">
+            <div class="hero-stat"><span>AI probability</span><strong>{float(r.model_prob):.0%}</strong></div>
+            <div class="hero-stat"><span>Recent hit rate</span><strong>{float(r.recent_hit_rate):.0%}</strong></div>
+            <div class="hero-stat"><span>Best price</span><strong>{fmt_odds(r.best_price)}</strong></div>
+          </div>
+        </div>""",unsafe_allow_html=True)
+        win=st.segmented_control("History",["L5","L10","L20"],default="L10",key="player_chart_window")
+        ng={"L5":5,"L10":10,"L20":20}[win]
+        prop_history_chart(r.sport,r.player_name,r.market,r.point,r.side,ng)
+        st.caption("Green = prop would have hit the selected line. Red = miss. Dashed line = current sportsbook line.")
     else:
         st.info("Search a player to build a live prop board.")
 
@@ -700,10 +925,13 @@ elif page=="🔎 Prop Scanner":
         z=q[(q.model_prob>=minp)&(q.edge>=mine)&q.market.isin(markets)].copy()
         z["Model %"]=(z.model_prob*100).round(1);z["Edge %"]=(z.edge*100).round(1)
         z["EV %"]=(z.ev_per_unit*100).round(1)
-        st.dataframe(z[["player_name","market","side","point","best_price","best_book",
-                        "Model %","Edge %","EV %","games_used","recent_average",
-                        "confidence","away_team","home_team"]].sort_values(["Model %","Edge %"],ascending=False),
-                     use_container_width=True,hide_index=True,height=600)
+        st.markdown('<div class="terminal-label">RANKED PROP BOARD</div>',unsafe_allow_html=True)
+        prop_list_cards(z,24)
+        with st.expander("Open full prop table"):
+            st.dataframe(z[["player_name","market","side","point","best_price","best_book",
+                            "Model %","Edge %","EV %","games_used","recent_average",
+                            "confidence","away_team","home_team"]].sort_values(["Model %","Edge %"],ascending=False),
+                         use_container_width=True,hide_index=True,height=600)
         st.download_button("Download filtered prop board",z.to_csv(index=False).encode(),
                            "wolfsports_prop_board.csv","text/csv")
 
@@ -760,7 +988,7 @@ elif page=="🧠 Model Lab":
     st.success("AI Autopilot is automatic. You do not need to press Train or Backtest. Manual controls below are only for forcing an immediate rebuild.")
     ap=get_autopilot_status()
     c1,c2,c3,c4=st.columns(4)
-    c1.metric("Autopilot","RUNNING" if (AUTOPILOT_THREAD and AUTOPILOT_THREAD.is_alive()) else "STOPPED")
+    c1.metric("Autopilot","RUNNING" if (st.session_state.get("_autopilot_thread") and st.session_state["_autopilot_thread"].is_alive()) else "STARTING")
     c2.metric("Cycles",int(ap.get("cycle_count") or 0))
     c3.metric("NBA last backtest",str(ap.get("last_backtest_nba") or "Waiting")[:19])
     c4.metric("NFL last backtest",str(ap.get("last_backtest_nfl") or "Waiting")[:19])

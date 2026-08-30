@@ -1,0 +1,17 @@
+WolfSportsAI V6.2 Visual Terminal Upgrade
+
+Major UI changes
+- Professional dark sportsbook/analytics visual style inspired by the supplied references.
+- Game board groups each matchup into one row.
+- Side-by-side Moneyline, Spread, Over and Under market boxes.
+- Each market box shows best odds, bookmaker, AI probability and edge.
+- Manual NBA/NFL market controls.
+- Manual Over/Under filtering.
+- Game Center gets a visual matchup hero and model projection cards.
+- Player Lab gets a mobile-friendly prop list plus detailed L5/L10/L20 hit/miss chart.
+- Green bars = hit against current line; red bars = miss.
+- Prop Scanner uses compact ranked prop cards with the raw table under an expander.
+- Responsive layout for desktop/tablet/mobile.
+- Existing Autopilot/cloud secrets/startup hotfix retained.
+
+The design is original WolfSportsAI branding and does not copy Outlier logos or proprietary assets.
