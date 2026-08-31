@@ -20,6 +20,7 @@ from autopilot import start_worker,latest_backtests
 from database import get_autopilot_status
 
 ROOT=Path(__file__).parent
+CORE_SPORTS=("NBA","NFL","MLB","NHL")
 init_db()
 
 # Store user settings outside the extracted program folder.
@@ -59,7 +60,7 @@ def _start_autopilot_worker(api_key):
     # The worker is a daemon thread and runs only while this Streamlit process is alive.
     return start_worker(
         api_key=api_key,
-        sports=("NBA","NFL","MLB","NHL"),
+        sports=CORE_SPORTS,
         refresh_minutes=5,
         retrain_hours=4,
         backtest_hours=12
@@ -316,7 +317,7 @@ with st.sidebar:
     )
     st.divider()
     st.caption("LIVE ENGINE")
-    sports=st.multiselect("Leagues",["NBA","NFL","MLB","NHL"],default=["NBA","NFL","MLB","NHL"])
+    sports=st.multiselect("Leagues",list(CORE_SPORTS),default=list(CORE_SPORTS), help="Controls the displayed leagues only. WolfSportsAI refreshes all supported leagues.")
     auto=st.toggle(
         "Background refresh",
         True,
@@ -415,8 +416,9 @@ def cache(s):
     return cached_snapshot(s).copy()
 
 def refresh():
+    """Refresh all supported team-market leagues regardless of sidebar filter."""
     frames=[];errs=[]
-    for s in sports:
+    for s in CORE_SPORTS:
         try:
             d,_=cached_featured(s,KEY)
             if len(d):
@@ -466,7 +468,7 @@ def score_props(pc,namefilter=None):
 # On first load use the newest locally stored snapshot only.
 if st.session_state.raw.empty:
     _frames=[]
-    for _sport in sports:
+    for _sport in CORE_SPORTS:
         try:
             _d=cache(_sport)
             if _d is not None and len(_d):
@@ -1008,6 +1010,55 @@ def friendly_market_name(value):
         "total":"Total",
     }.get(m,str(value).title())
 
+
+def ensure_live_league(sport):
+    """Immediately hydrate a league when its page is opened and no live rows are loaded."""
+    if not KEY:
+        return False, "API key is not connected."
+
+    current=st.session_state.raw
+    has_current=(
+        current is not None and len(current) and "sport" in current.columns
+        and current["sport"].astype(str).eq(sport).any()
+    )
+    if has_current:
+        return False, None
+
+    try:
+        # Bypass stale Streamlit cache on first hydration of a newly added league.
+        fresh,_=featured(sport,KEY)
+        if fresh is not None and len(fresh):
+            append_df("market_snapshots",fresh)
+
+            other=current if current is not None and len(current) else pd.DataFrame()
+            if len(other) and "sport" in other.columns:
+                other=other[~other["sport"].astype(str).eq(sport)]
+            st.session_state.raw=pd.concat([other,fresh],ignore_index=True,sort=False) if len(other) else fresh.copy()
+
+            # Also store schedule + live scores when possible.
+            try:
+                up,_=upcoming_events(sport,KEY)
+                if len(up):
+                    upsert_upcoming_games(up)
+            except Exception:
+                pass
+            try:
+                sc,_=scores(sport,KEY)
+                if len(sc):
+                    upsert_results(sc)
+            except Exception:
+                pass
+
+            cached_snapshot.clear()
+            cached_team_model.clear()
+            cached_market_view.clear()
+            cached_upcoming_schedule.clear()
+            return True, None
+
+        return False, f"No current {sport} odds were returned by The Odds API."
+    except Exception as e:
+        return False, str(e)
+
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
     top_header("Games","Live NBA, NFL, MLB and NHL board with AI probability, best price and fast matchup drilldowns.")
@@ -1023,7 +1074,7 @@ if page=="🔥 Best Bets":
             cached_snapshot.clear()
             cached_team_model.clear()
             cached_market_view.clear()
-            with st.spinner("Getting fresh sportsbook lines..."):
+            with st.spinner("Getting fresh NBA, NFL, MLB and NHL sportsbook lines..."):
                 st.session_state.raw,errs=refresh()
             for e in errs:
                 st.warning(e)
@@ -1065,12 +1116,49 @@ elif page in ("🏀 NBA","🏈 NFL","⚾ MLB","🏒 NHL"):
         sport="MLB"
     else:
         sport="NHL"
+
+    # Newly added leagues should never wait for a scheduled maintenance window.
+    # Hydrate immediately on first page open when no live rows are in the session.
+    _hydrated,_hydrate_error=ensure_live_league(sport)
+    if _hydrated:
+        st.rerun()
+
     spread_name="Run Line" if sport=="MLB" else "Puck Line" if sport=="NHL" else "Spread"
     top_header(
         f"{sport} Games",
         f"Moneyline, {spread_name}, and Over/Under are precomputed from the same loaded odds snapshot."
     )
-    league_market_fragment(sport,_team_json)
+
+    if _hydrate_error:
+        st.warning(f"{sport} live feed: {_hydrate_error}")
+        if st.button(f"Force refresh {sport}", key=f"force_{sport}", type="primary", use_container_width=True):
+            try:
+                fresh,_=featured(sport,KEY)
+                if len(fresh):
+                    append_df("market_snapshots",fresh)
+                    other=st.session_state.raw if len(st.session_state.raw) else pd.DataFrame()
+                    if len(other) and "sport" in other.columns:
+                        other=other[~other.sport.astype(str).eq(sport)]
+                    st.session_state.raw=pd.concat([other,fresh],ignore_index=True,sort=False) if len(other) else fresh
+                    cached_featured.clear()
+                    cached_snapshot.clear()
+                    cached_team_model.clear()
+                    cached_market_view.clear()
+                    st.rerun()
+                else:
+                    st.error(f"The API returned zero current {sport} market rows.")
+            except Exception as e:
+                st.error(str(e))
+
+    # Rebuild team view from the now-current session snapshot if needed.
+    _sport_raw=st.session_state.raw
+    if _sport_raw is not None and len(_sport_raw):
+        _sport_team=cached_team_model(_sport_raw.to_json(orient="split",date_format="iso")).copy()
+        _sport_team_json=_sport_team.to_json(orient="split",date_format="iso") if len(_sport_team) else ""
+    else:
+        _sport_team_json=""
+
+    league_market_fragment(sport,_sport_team_json)
 
 
 elif page=="📅 Upcoming Games":
@@ -1088,7 +1176,7 @@ elif page=="📅 Upcoming Games":
         if st.button("↻ Refresh upcoming schedule",use_container_width=True,disabled=not bool(KEY)):
             rows=[];errs=[]
             with st.spinner("Checking upcoming NBA, NFL, MLB and NHL schedules..."):
-                for _sport in ("NBA","NFL","MLB","NHL"):
+                for _sport in CORE_SPORTS:
                     try:
                         _up,_=upcoming_events(_sport,KEY)
                         if len(_up):
@@ -1105,7 +1193,7 @@ elif page=="📅 Upcoming Games":
     # First visit after a new deployment: populate only this page, never block other pages.
     if upcoming.empty and KEY:
         with st.spinner("Loading the upcoming schedule for the first time..."):
-            for _sport in ("NBA","NFL","MLB","NHL"):
+            for _sport in CORE_SPORTS:
                 try:
                     _up,_=upcoming_events(_sport,KEY)
                     if len(_up):

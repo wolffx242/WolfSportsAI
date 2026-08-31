@@ -1,0 +1,25 @@
+{
+  "compile": {
+    "app.py": "OK",
+    "parlay.py": "OK",
+    "database.py": "OK",
+    "analytics.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "game_center.py": "OK"
+  },
+  "checks": {
+    "core_sports": true,
+    "refresh_all": true,
+    "initial_all": true,
+    "lazy_hydration": true,
+    "league_hydration_call": true,
+    "force_refresh": true,
+    "mlb_page": true,
+    "nhl_page": true
+  }
+}

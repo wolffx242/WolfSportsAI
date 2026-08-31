@@ -1,0 +1,19 @@
+WolfSportsAI V8.1 - MLB/NHL Live Hydration Fix
+
+Problem:
+MLB/NHL navigation existed, but live data could remain empty because the app could reuse
+the previous NBA/NFL-only session/sidebar snapshot until a scheduled maintenance refresh.
+
+Fixes:
+- CORE_SPORTS is always NBA/NFL/MLB/NHL.
+- Global Refresh live board always fetches all four leagues.
+- Initial local-cache hydration checks all four leagues.
+- Opening any league page immediately fetches that league if it is missing from session data.
+- MLB/NHL no longer need to wait for the scheduled maintenance window.
+- Immediate hydration also attempts schedule and score refresh.
+- Each league page has a Force Refresh button if its API call returns no rows/errors.
+- Sidebar league multiselect is now only a display preference, not a data-fetch limiter.
+
+MLB API:
+Sport key baseball_mlb
+Markets h2h, spreads, totals
