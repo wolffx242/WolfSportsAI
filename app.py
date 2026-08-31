@@ -59,7 +59,7 @@ def _start_autopilot_worker(api_key):
     # The worker is a daemon thread and runs only while this Streamlit process is alive.
     return start_worker(
         api_key=api_key,
-        sports=("NBA","NFL"),
+        sports=("NBA","NFL","MLB","NHL"),
         refresh_minutes=5,
         retrain_hours=4,
         backtest_hours=12
@@ -309,14 +309,14 @@ with st.sidebar:
 
     page=st.radio(
         "Navigation",
-        ["🔥 Best Bets","🏀 NBA","🏈 NFL","📅 Upcoming Games","🎯 Game Center","👤 Player Lab","🔎 Prop Scanner",
+        ["🔥 Best Bets","🏀 NBA","🏈 NFL","⚾ MLB","🏒 NHL","📅 Upcoming Games","🎯 Game Center","👤 Player Lab","🔎 Prop Scanner",
          "🧾 Parlay Builder","🧠 Model Lab","⚙️ Settings"],
         label_visibility="collapsed",
         key="nav"
     )
     st.divider()
     st.caption("LIVE ENGINE")
-    sports=st.multiselect("Leagues",["NBA","NFL"],default=["NBA","NFL"])
+    sports=st.multiselect("Leagues",["NBA","NFL","MLB","NHL"],default=["NBA","NFL","MLB","NHL"])
     auto=st.toggle(
         "Background refresh",
         True,
@@ -544,7 +544,7 @@ def betting_filter_bar(df, key_prefix="marketfilter"):
     with c1:
         league_choice=st.segmented_control(
             "League",
-            ["All","NBA","NFL"],
+            ["All","NBA","NFL","MLB","NHL"],
             default="All",
             key=f"{key_prefix}_league"
         )
@@ -571,13 +571,13 @@ def betting_filter_bar(df, key_prefix="marketfilter"):
     if league_choice and league_choice!="All" and "sport" in out.columns:
         out=out[out["sport"].astype(str).str.upper()==league_choice]
 
-    market_map={"Moneyline":"h2h","Spread":"spreads","Total":"totals"}
+    market_map={"Moneyline":"moneyline","Spread":"spread","Total":"total"}
     if market_choice and market_choice!="All" and "market" in out.columns:
         out=out[out["market"].astype(str).str.lower()==market_map[market_choice]]
 
     # Only apply Over/Under direction to rows that are totals.
     if total_side and total_side!="Both" and "market" in out.columns and "selection" in out.columns:
-        is_total=out["market"].astype(str).str.lower().eq("totals")
+        is_total=out["market"].astype(str).str.lower().eq("total")
         side_match=out["selection"].astype(str).str.lower().str.startswith(total_side.lower())
         out=out[(~is_total) | side_match]
 
@@ -766,8 +766,12 @@ def game_market_board(df,keyprefix="board",limit=16,display_market=None):
                               "Total" if "total" in available else "Moneyline"))
 
     evs=df[["event_id","sport","away_team","home_team","commence_time"]].drop_duplicates("event_id").head(limit)
+    _board_sport=str(evs.iloc[0].sport) if len(evs) else ""
+    _market_label=("Run Line" if market=="Spread" and _board_sport=="MLB" else
+                   "Puck Line" if market=="Spread" and _board_sport=="NHL" else
+                   "Over / Under" if market=="Total" else market)
     st.markdown(
-        f'<div class="pick-ribbon"><strong>{market}</strong> • AI WIN % is WolfSportsAI straight-up win probability, not public betting percentage.</div>',
+        f'<div class="pick-ribbon"><strong>{_market_label}</strong> • AI WIN % is WolfSportsAI straight-up win probability, not public betting percentage.</div>',
         unsafe_allow_html=True
     )
 
@@ -939,7 +943,10 @@ def league_market_fragment(sport, team_json):
             "Market",
             ["Moneyline","Spread","Total","All"],
             default="Moneyline",
-            key=f"{sport}_manual_market"
+            key=f"{sport}_manual_market",
+            format_func=lambda x: ("Run Line" if x=="Spread" and sport=="MLB" else
+                                   "Puck Line" if x=="Spread" and sport=="NHL" else
+                                   "Over / Under" if x=="Total" else x)
         )
     with m2:
         total_side=st.segmented_control(
@@ -965,49 +972,30 @@ def league_market_fragment(sport, team_json):
 
 
 def friendly_pick_label(row):
-    """Turn raw market data into a sportsbook-style pick description."""
-    market=str(row.get("market","")).strip().lower()
-    selection=str(row.get("selection","")).strip()
-    away=str(row.get("away_team","")).strip()
-    home=str(row.get("home_team","")).strip()
-
-    point=row.get("line",np.nan)
-    if pd.isna(point):
-        point=row.get("point",np.nan)
-
-    matchup=f"{away}/{home}" if away and home else (away or home or "Game")
-
-    if market in ("moneyline","h2h"):
-        team=selection or "Team"
-        return f"{team} Moneyline"
-
-    if market in ("spread","spreads"):
-        team=selection or "Team"
-        if pd.notna(point):
-            try:
-                return f"{team} {float(point):+g}"
-            except Exception:
-                pass
-        return f"{team} Spread"
-
-    if market in ("total","totals"):
-        side="Over" if selection.lower().startswith("over") else (
-            "Under" if selection.lower().startswith("under") else selection.title()
-        )
-        if pd.notna(point):
-            try:
-                return f"{matchup} {side} {float(point):g}"
-            except Exception:
-                pass
-        return f"{matchup} {side}"
-
-    # Player props or other markets: preserve useful selection and line.
-    if pd.notna(point):
+    market=str(row.get("market",""))
+    selection=str(row.get("selection",""))
+    sport=str(row.get("sport",""))
+    line=row.get("line")
+    away=str(row.get("away_team",""))
+    home=str(row.get("home_team",""))
+    if market in ("Moneyline","h2h"):
+        return f"{selection} Moneyline"
+    if market in ("Spread","spreads"):
         try:
-            return f"{selection} {float(point):g}".strip()
+            line_txt=f"{float(line):+g}"
         except Exception:
-            pass
-    return selection or str(row.get("market","Pick")).title()
+            line_txt=str(line)
+        suffix=" Run Line" if sport=="MLB" else " Puck Line" if sport=="NHL" else ""
+        return f"{selection} {line_txt}{suffix}".strip()
+    if market in ("Total","totals"):
+        try:
+            line_txt=f"{float(line):g}"
+        except Exception:
+            line_txt=str(line)
+        return f"{away}/{home} {selection} {line_txt}".strip()
+    if row.get("leg_type")=="Player Prop":
+        return f"{selection} {line if pd.notna(line) else ''}".strip()
+    return selection
 
 def friendly_market_name(value):
     m=str(value).strip().lower()
@@ -1022,7 +1010,7 @@ def friendly_market_name(value):
 
 # ---------- PAGE CONTENT ----------
 if page=="🔥 Best Bets":
-    top_header("Games","Live NBA & NFL board with AI probability, best price and fast matchup drilldowns.")
+    top_header("Games","Live NBA, NFL, MLB and NHL board with AI probability, best price and fast matchup drilldowns.")
     st.markdown("### Game filters")
     filtered_board=betting_filter_bar(team,"bestbets_filter")
     a,b=st.columns([1.4,.7])
@@ -1054,8 +1042,8 @@ if page=="🔥 Best Bets":
           <div class="hero-match-title">WolfSportsAI is ready</div>
           <div class="hero-match-sub">The interface loads immediately. Live odds are refreshed by Autopilot in the background.</div>
           <div class="hero-match-stats">
-            <div class="hero-stat"><span>NBA</span><strong>Enabled</strong></div>
-            <div class="hero-stat"><span>NFL</span><strong>Enabled</strong></div>
+            <div class="hero-stat"><span>NBA / NFL</span><strong>Enabled</strong></div>
+            <div class="hero-stat"><span>MLB / NHL</span><strong>Enabled</strong></div>
             <div class="hero-stat"><span>Live Engine</span><strong>Starting</strong></div>
           </div>
         </div>
@@ -1068,11 +1056,19 @@ if page=="🔥 Best Bets":
     with st.expander("Show ranked AI opportunities"):
         pick_cards(filtered_board,10)
 
-elif page in ("🏀 NBA","🏈 NFL"):
-    sport="NBA" if "NBA" in page else "NFL"
+elif page in ("🏀 NBA","🏈 NFL","⚾ MLB","🏒 NHL"):
+    if "NBA" in page:
+        sport="NBA"
+    elif "NFL" in page:
+        sport="NFL"
+    elif "MLB" in page:
+        sport="MLB"
+    else:
+        sport="NHL"
+    spread_name="Run Line" if sport=="MLB" else "Puck Line" if sport=="NHL" else "Spread"
     top_header(
         f"{sport} Games",
-        "Instant market switching — Moneyline, Spread and Total are precomputed from the same loaded odds snapshot."
+        f"Moneyline, {spread_name}, and Over/Under are precomputed from the same loaded odds snapshot."
     )
     league_market_fragment(sport,_team_json)
 
@@ -1080,19 +1076,19 @@ elif page in ("🏀 NBA","🏈 NFL"):
 elif page=="📅 Upcoming Games":
     top_header(
         "Upcoming Games",
-        "Upcoming NBA and NFL matchups are cached from the internet so the AI and Parlay Builder can prepare before game time."
+        "Upcoming NBA, NFL, MLB and NHL matchups are cached so the AI and Parlay Builder can prepare before game time."
     )
 
     c1,c2=st.columns([2,1])
     with c1:
         upcoming_sport=st.segmented_control(
-            "League",["All","NBA","NFL"],default="All",key="upcoming_sport"
+            "League",["All","NBA","NFL","MLB","NHL"],default="All",key="upcoming_sport"
         )
     with c2:
         if st.button("↻ Refresh upcoming schedule",use_container_width=True,disabled=not bool(KEY)):
             rows=[];errs=[]
-            with st.spinner("Checking upcoming NBA and NFL schedules..."):
-                for _sport in ("NBA","NFL"):
+            with st.spinner("Checking upcoming NBA, NFL, MLB and NHL schedules..."):
+                for _sport in ("NBA","NFL","MLB","NHL"):
                     try:
                         _up,_=upcoming_events(_sport,KEY)
                         if len(_up):
@@ -1109,7 +1105,7 @@ elif page=="📅 Upcoming Games":
     # First visit after a new deployment: populate only this page, never block other pages.
     if upcoming.empty and KEY:
         with st.spinner("Loading the upcoming schedule for the first time..."):
-            for _sport in ("NBA","NFL"):
+            for _sport in ("NBA","NFL","MLB","NHL"):
                 try:
                     _up,_=upcoming_events(_sport,KEY)
                     if len(_up):
@@ -1150,7 +1146,7 @@ elif page=="🎯 Game Center":
         st.rerun()
     eid=st.session_state.get("selected_event_id")
     if not eid:
-        st.info("Choose a game from Best Bets, NBA, or NFL first.")
+        st.info("Choose a game from Best Bets, NBA, NFL, MLB, or NHL first.")
     else:
         evraw=st.session_state.raw[st.session_state.raw.event_id.eq(eid)]
         evteam=team[team.event_id.eq(eid)] if len(team) else pd.DataFrame()
@@ -1161,6 +1157,8 @@ elif page=="🎯 Game Center":
             sport=str(b.sport);home=str(b.home_team);away=str(b.away_team)
             packet=matchup_packet(sport,home,away)
             model=packet.get("model")
+            if sport in ("MLB","NHL") and not model:
+                st.caption(f"{sport} is using live market consensus now; the local calibration model strengthens as WolfSportsAI collects completed {sport} games.")
             if model:
                 st.markdown(f"""<div class="hero-match">
                   <div class="hero-match-title">{away} @ {home}</div>
@@ -1254,7 +1252,7 @@ elif page=="🎯 Game Center":
 
 
 elif page=="👤 Player Lab":
-    top_header("Player Lab","Search one player and compare live prop lines against recent performance.")
+    top_header("Player Lab","NBA/NFL player props: compare live lines against recent performance. MLB/NHL team markets are available on their league pages and Parlay Builder.")
     st.markdown('<div class="section-card">',unsafe_allow_html=True)
     c1,c2,c3=st.columns([1,2.4,1])
     sp=c1.selectbox("League",["NBA","NFL"],key="playerleague")
@@ -1352,7 +1350,7 @@ elif page=="🔎 Prop Scanner":
                            "wolfsports_prop_board.csv","text/csv")
 
 elif page=="🧾 Parlay Builder":
-    top_header("Parlay Builder","Build compact value sheets or go all the way to a 16-leg longshot.")
+    top_header("Parlay Builder","Build NBA, NFL, MLB and NHL parlays from upcoming games with real sportsbook lines.")
     st.markdown('<div class="section-card">',unsafe_allow_html=True)
     c1,c2,c3,c4=st.columns(4)
     legs=c1.selectbox("Legs",SIZES,index=2)
@@ -1489,7 +1487,7 @@ elif page=="🧠 Model Lab":
     for i,m in enumerate(["Moneyline","Spread","Total"]):
         with cols[i]:
             st.markdown(f'<div class="section-card"><h3>{m}</h3>',unsafe_allow_html=True)
-            for sp in ["NBA","NFL"]:
+            for sp in ["NBA","NFL","MLB","NHL"]:
                 if st.button(f"Train {sp} {m}",key=f"train_{sp}_{m}",use_container_width=True):
                     _,info=train(sp,m,150 if sp=="NBA" else 100)
                     if info["status"]=="trained":
@@ -1527,14 +1525,15 @@ elif page=="⚙️ Settings":
 
     st.info("Speed mode: model learning, historical updates and maintenance are scheduled for low-traffic windows. Outside those windows the dashboard primarily serves cached data and predictions.")
     st.write("Automatic schedule while WolfSportsAI is open:")
-    st.write("• Odds/results refresh: every 15 minutes")
+    st.write("• Odds/results/schedules: NBA, NFL, MLB and NHL during scheduled maintenance windows")
     st.write("• Afternoon maintenance: 4:00–4:30 PM (Bahamas time)")
     st.write("• Backtesting: every 6 hours")
     st.caption("On a free cloud host, Autopilot runs while the app instance is awake. Free hosts may sleep/restart inactive apps; WolfSportsAI rebuilds its historical model state when needed.")
     st.subheader("Data sources")
-    st.write("Sportsbook odds: The Odds API")
+    st.write("Sportsbook odds: The Odds API (NBA, NFL, MLB, NHL)")
     st.write("NBA player history: nba_api")
     st.write("NFL player history: nflreadpy / nflverse")
+    st.write("MLB/NHL: team moneyline, run/puck line, totals, schedules and results via The Odds API; local calibration improves as completed games accumulate.")
     st.subheader("Local database")
     st.code(str((ROOT/"data"/"wolfsports.db").resolve()))
     st.caption("All local learning history remains on your computer.")

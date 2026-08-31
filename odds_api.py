@@ -4,7 +4,7 @@ import requests
 import pandas as pd
 
 BASE="https://api.the-odds-api.com/v4"
-SPORT_KEYS={"NBA":"basketball_nba","NFL":"americanfootball_nfl"}
+SPORT_KEYS={"NBA":"basketball_nba","NFL":"americanfootball_nfl","MLB":"baseball_mlb","NHL":"icehockey_nhl"}
 
 NBA_PROPS=[
  "player_points","player_rebounds","player_assists","player_threes",
@@ -72,6 +72,8 @@ def events(sport,key):
     return _get(f"/sports/{SPORT_KEYS[sport]}/events",key,{"dateFormat":"iso"})
 
 def event_props(sport,event_id,key,regions="us,us2"):
+    if sport not in ("NBA","NFL"):
+        return pd.DataFrame(),{}
     markets=NBA_PROPS if sport=="NBA" else NFL_PROPS
     data,h=_get(f"/sports/{SPORT_KEYS[sport]}/events/{event_id}/odds",key,{
       "regions":regions,"markets":",".join(markets),

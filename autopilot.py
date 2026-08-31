@@ -19,6 +19,7 @@ from odds_api import featured, scores, upcoming_events
 from historical_bootstrap import (
     bootstrap_sport, train_bootstrap_models, load_bootstrap
 )
+from team_models import train as train_calibration
 
 _LOCK=threading.Lock()
 _THREAD=None
@@ -27,6 +28,7 @@ _BOOTSTRAP_ATTEMPT={}
 _LAST_COMPLETED_COUNTS={}
 APP_TZ=ZoneInfo("America/Nassau")
 _LAST_WINDOW_RUN={}
+MODEL_SPORTS={"NBA","NFL"}
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -94,7 +96,7 @@ def _completed_count_safe(sport):
     except Exception:
         return 0
 
-def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
+def run_cycle(api_key, sports=("NBA","NFL","MLB","NHL"), refresh_minutes=5,
               retrain_hours=4, backtest_hours=12,
               bootstrap_if_missing=True):
     if not _LOCK.acquire(blocking=False):
@@ -108,7 +110,7 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
         changed_sports=set()
         errors=[]
 
-        # 1) Fast lane: NBA and NFL refresh in parallel.
+        # 1) Fast lane: NBA, NFL, MLB and NHL refresh in parallel.
         if api_key and due(st.get("last_data_refresh"),refresh_minutes):
             before={s:_completed_count_safe(s) for s in sports}
 
@@ -142,8 +144,10 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
 
             update_autopilot_status(last_data_refresh=iso())
 
-        # 2) Historical bootstrap is one-time / low-frequency only.
-        for sport in sports:
+        # 2) Historical bootstrap is currently available for NBA/NFL.
+        # MLB/NHL still collect odds/results and can use local odds-calibration models
+        # after enough completed games have accumulated.
+        for sport in [s for s in sports if s in MODEL_SPORTS]:
             hist_count=_historical_count(sport)
             min_rows=150 if sport=="NBA" else 100
             _last_boot=_BOOTSTRAP_ATTEMPT.get(sport)
@@ -159,9 +163,8 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
                 except Exception as e:
                     errors.append(f"{sport} bootstrap: {e}")
 
-        # 3) Retrain only when new results arrived, model is missing,
-        #    or the safety cadence has elapsed.
-        for sport in sports:
+        # 3) Retrain historical-form models for supported leagues only.
+        for sport in [s for s in sports if s in MODEL_SPORTS]:
             key=f"last_retrain_{sport.lower()}"
             payload=load_bootstrap(sport)
             model_missing=payload is None
@@ -184,8 +187,8 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
                 except Exception as e:
                     errors.append(f"{sport} retrain: {e}")
 
-        # 4) Full backtest safety check only if no recent training evaluation exists.
-        for sport in sports:
+        # 4) Full backtest safety check for supported historical-form leagues.
+        for sport in [s for s in sports if s in MODEL_SPORTS]:
             key=f"last_backtest_{sport.lower()}"
             latest=get_autopilot_status().get(key)
             if due(latest,backtest_hours*60):
@@ -198,6 +201,16 @@ def run_cycle(api_key, sports=("NBA","NFL"), refresh_minutes=5,
                         update_autopilot_status(**{key:iso()})
                 except Exception as e:
                     errors.append(f"{sport} backtest: {e}")
+
+        # 5) MLB/NHL learn from the odds/results WolfSportsAI collects.
+        # Keep this lightweight: train only when new completed games arrive or overnight.
+        for sport in [s for s in sports if s in ("MLB","NHL")]:
+            if sport in changed_sports or retrain_hours == 0:
+                for market in ("Moneyline","Spread","Total"):
+                    try:
+                        train_calibration(sport,market,60)
+                    except Exception as e:
+                        errors.append(f"{sport} {market} calibration: {e}")
 
         if errors:
             update_autopilot_status(last_error=" | ".join(errors)[:1200])
@@ -243,7 +256,7 @@ def _window_key(window, now=None):
     return f"{now.date().isoformat()}:{window}"
 
 
-def refresh_personnel_context(sports=("NBA","NFL")):
+def refresh_personnel_context(sports=("NBA","NFL","MLB","NHL")):
     """
     Scheduled personnel refresh hook.
 
@@ -262,7 +275,7 @@ def refresh_personnel_context(sports=("NBA","NFL")):
         "lineups": "provider-dependent",
     }
 
-def scheduled_cycle(api_key, sports=("NBA","NFL")):
+def scheduled_cycle(api_key, sports=("NBA","NFL","MLB","NHL")):
     """Run only the work assigned to the active maintenance window."""
     now = local_now()
     window = maintenance_window(now)
@@ -316,7 +329,7 @@ def _loop(api_key,sports):
             pass
         _STOP.wait(60)
 
-def start_worker(api_key,sports=("NBA","NFL"),refresh_minutes=5,retrain_hours=4,backtest_hours=12):
+def start_worker(api_key,sports=("NBA","NFL","MLB","NHL"),refresh_minutes=5,retrain_hours=4,backtest_hours=12):
     """Start lightweight scheduler. Parameters retained for backward compatibility."""
     global _THREAD
     if _THREAD and _THREAD.is_alive():

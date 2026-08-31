@@ -1,0 +1,30 @@
+{
+  "version": "8.0 MLB + NHL",
+  "compile": {
+    "app.py": "OK",
+    "parlay.py": "OK",
+    "database.py": "OK",
+    "analytics.py": "OK",
+    "odds_api.py": "OK",
+    "autopilot.py": "OK",
+    "historical_bootstrap.py": "OK",
+    "streamlit_app.py": "OK",
+    "team_models.py": "OK",
+    "stats_sources.py": "OK",
+    "game_center.py": "OK"
+  },
+  "checks": {
+    "sport_keys": true,
+    "nav_mlb_nhl": true,
+    "sidebar_all4": true,
+    "upcoming_all4": true,
+    "league_branch_all4": true,
+    "run_line": true,
+    "puck_line": true,
+    "autopilot_all4": true,
+    "historical_only_nba_nfl": true,
+    "mlb_nhl_calibration": true,
+    "mlb_nhl_parlay_fallback": true,
+    "parlay_ab_only": true
+  }
+}

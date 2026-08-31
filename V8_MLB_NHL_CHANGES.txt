@@ -1,0 +1,33 @@
+WolfSportsAI V8 - MLB + NHL
+
+Added full MLB and NHL team-market support:
+- MLB Moneyline
+- MLB Run Line (spread)
+- MLB Over / Under
+- NHL Moneyline
+- NHL Puck Line (spread)
+- NHL Over / Under
+
+App integration:
+- Dedicated MLB and NHL navigation pages
+- Best Bets league filter includes MLB/NHL
+- Upcoming Games includes all four leagues
+- Parlay Builder can use MLB/NHL future team markets
+- Friendly parlay names use Run Line / Puck Line wording
+- Bahamas-local game date/time retained
+- A+/A/B-only parlay quality gate retained
+
+Data:
+- The Odds API keys: baseball_mlb and icehockey_nhl
+- h2h, spreads and totals use the existing consensus pipeline
+- scheduled maintenance fetches odds, schedules and scores for NBA/NFL/MLB/NHL
+
+Model behavior:
+- NBA/NFL keep historical-form bootstrap models
+- MLB/NHL start with no-vig market consensus
+- strong MLB/NHL consensus favorites (62%+) can receive at most a B fallback grade while the local model is learning; edge remains 0 and is not invented
+- after 60 collected completed games, scheduled maintenance can train local MLB/NHL odds-calibration models for Moneyline, Spread and Total
+
+Player props:
+- Player Lab / Prop Scanner remain NBA/NFL only in this build
+- MLB/NHL requested scope is team Moneyline, spread/run/puck line and Over/Under

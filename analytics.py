@@ -117,6 +117,19 @@ def conf(p,e):
 def enrich(df):
     if df is None or df.empty:return df
     x=df.copy()
-    x["confidence"]=[conf(float(p),float(e)) for p,e in zip(x.model_prob,x.edge)]
+    grades=[]
+    for _,r in x.iterrows():
+        p=float(r.model_prob); e=float(r.edge)
+        g=conf(p,e)
+        # MLB/NHL can be used immediately while their local calibration models
+        # accumulate completed games. This does NOT invent an edge: edge stays 0.
+        # Strong no-vig consensus favorites receive at most a B fallback grade.
+        if str(r.get("sport","")) in ("MLB","NHL") and str(r.get("prob_source","")).startswith("No-vig") and e <= 1e-9:
+            if p >= .62:
+                g="B"
+            elif p >= .55:
+                g="C"
+        grades.append(g)
+    x["confidence"]=grades
     x["ev_per_unit"]=[float(p)*decimal(o)-1 if pd.notna(o) else np.nan for p,o in zip(x.model_prob,x.best_price)]
     return x
